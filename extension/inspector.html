@@ -15,11 +15,13 @@
   <body>
     <h1>Capture Inspector</h1>
     <p id="status">Loading...</p>
+    <label for="sessionSelect">Session</label>
+    <select id="sessionSelect"></select>
     <button id="startCapture" type="button">Start Capture</button>
     <button id="stopCapture" type="button">Stop Capture</button>
     <button id="refresh" type="button">Refresh Capture State</button>
     <button id="exportJson" type="button">Export Active Session JSON</button>
-    <h2>Latest Session</h2>
+    <h2>Selected Session</h2>
     <pre id="session">None</pre>
     <h2>Recent Steps (max 10)</h2>
     <pre id="steps">None</pre>
