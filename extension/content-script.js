@@ -45,6 +45,36 @@ function buildClickPayload(event) {
   };
 }
 
+function buildKeyPayload(event) {
+  const allowListedKeys = new Set(["Enter", "Tab", "Escape"]);
+  const isShortcut = event.ctrlKey || event.metaKey || event.altKey;
+  if (!allowListedKeys.has(event.key) && !isShortcut) {
+    return null;
+  }
+
+  const el = event.target;
+  if (!(el instanceof Element)) {
+    return null;
+  }
+
+  return {
+    kind: "key",
+    href: window.location.href,
+    ts: Date.now(),
+    key: event.key,
+    modifiers: {
+      ctrl: Boolean(event.ctrlKey),
+      meta: Boolean(event.metaKey),
+      alt: Boolean(event.altKey),
+      shift: Boolean(event.shiftKey)
+    },
+    target: {
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null
+    }
+  };
+}
+
 safeSendMessage({
   type: "CONTENT_SCRIPT_READY",
   payload: { href: window.location.href, ts: Date.now() }
@@ -69,4 +99,23 @@ function onCaptureClick(event) {
   }
 }
 
+function onCaptureKeydown(event) {
+  try {
+    if (!hasLiveExtensionContext()) {
+      document.removeEventListener("keydown", onCaptureKeydown, true);
+      return;
+    }
+
+    const payload = buildKeyPayload(event);
+    if (!payload) {
+      return;
+    }
+
+    safeSendMessage({ type: "STEP_CAPTURED", payload });
+  } catch {
+    document.removeEventListener("keydown", onCaptureKeydown, true);
+  }
+}
+
 document.addEventListener("click", onCaptureClick, true);
+document.addEventListener("keydown", onCaptureKeydown, true);

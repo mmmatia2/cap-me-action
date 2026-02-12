@@ -4,6 +4,31 @@ function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function buildStepSignature(step) {
+  const t = step.target ?? {};
+  const m = step.modifiers ?? {};
+  return [
+    step.type,
+    step.url,
+    t.tag ?? "",
+    t.id ?? "",
+    step.key ?? "",
+    m.ctrl ? "1" : "0",
+    m.meta ? "1" : "0",
+    m.alt ? "1" : "0",
+    m.shift ? "1" : "0"
+  ].join("|");
+}
+
+function findLatestSessionStep(steps, sessionId) {
+  for (let i = steps.length - 1; i >= 0; i -= 1) {
+    if (steps[i].sessionId === sessionId) {
+      return steps[i];
+    }
+  }
+  return null;
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = sender.tab?.id;
   if (!message?.type) {
@@ -73,12 +98,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         type: message.payload?.kind ?? "unknown",
         url: message.payload?.href ?? "",
         at: message.payload?.ts ?? Date.now(),
+        key: message.payload?.key ?? null,
+        modifiers: message.payload?.modifiers ?? null,
         target: message.payload?.target ?? {}
       };
-      steps.push(step);
+
+      const latestSessionStep = findLatestSessionStep(steps, sessionId);
+      const isDuplicate =
+        latestSessionStep &&
+        buildStepSignature(latestSessionStep) === buildStepSignature(step) &&
+        step.at - (latestSessionStep.at ?? 0) <= 800;
+
+      if (!isDuplicate) {
+        steps.push(step);
+      }
 
       const session = sessions.find((x) => x.id === sessionId);
-      if (session) {
+      if (session && !isDuplicate) {
         session.stepsCount += 1;
         session.updatedAt = step.at;
       }
