@@ -106,6 +106,52 @@ function exportSelectedSessionJson() {
   });
 }
 
+// Purpose: clear one selected session and its related steps/tab mappings.
+// Inputs: selectedSessionId + storage state. Outputs: updated sessions/steps/sessionByTab collections.
+function clearSelectedSession() {
+  chrome.storage.local.get(["sessions", "steps", "sessionByTab"], (result) => {
+    const sessions = result.sessions ?? [];
+    const steps = result.steps ?? [];
+    const sessionByTab = result.sessionByTab ?? {};
+    if (!selectedSessionId) {
+      document.getElementById("status").textContent = "No selected session to clear.";
+      return;
+    }
+
+    const nextSessions = sessions.filter((x) => x.id !== selectedSessionId);
+    const nextSteps = steps.filter((x) => x.sessionId !== selectedSessionId);
+    const nextSessionByTab = Object.fromEntries(
+      Object.entries(sessionByTab).filter(([, value]) => value !== selectedSessionId)
+    );
+
+    chrome.storage.local.set(
+      { sessions: nextSessions, steps: nextSteps, sessionByTab: nextSessionByTab },
+      () => {
+        selectedSessionId = null;
+        document.getElementById("status").textContent = "Selected session cleared.";
+        refreshCaptureState();
+      }
+    );
+  });
+}
+
+function resetAllCaptureData() {
+  chrome.storage.local.set(
+    {
+      captureState: { isCapturing: false, startedAt: null },
+      sessions: [],
+      steps: [],
+      sessionByTab: {},
+      eventLog: []
+    },
+    () => {
+      selectedSessionId = null;
+      document.getElementById("status").textContent = "All capture data reset.";
+      refreshCaptureState();
+    }
+  );
+}
+
 document.getElementById("sessionSelect").addEventListener("change", (event) => {
   selectedSessionId = event.target.value || null;
   refreshCaptureState();
@@ -114,4 +160,6 @@ document.getElementById("startCapture").addEventListener("click", () => setCaptu
 document.getElementById("stopCapture").addEventListener("click", () => setCaptureMode("STOP_CAPTURE"));
 document.getElementById("refresh").addEventListener("click", refreshCaptureState);
 document.getElementById("exportJson").addEventListener("click", exportSelectedSessionJson);
+document.getElementById("clearSelected").addEventListener("click", clearSelectedSession);
+document.getElementById("resetAll").addEventListener("click", resetAllCaptureData);
 refreshCaptureState();
