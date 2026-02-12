@@ -4,6 +4,9 @@
   "version": "0.0.1",
   "description": "MV3 scaffold for capturing browser actions.",
   "permissions": ["storage", "tabs", "scripting"],
+  "action": {
+    "default_popup": "inspector.html"
+  },
   "background": {
     "service_worker": "background.js"
   },
