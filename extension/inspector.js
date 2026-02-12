@@ -6,6 +6,51 @@ function renderJson(elementId, value) {
   document.getElementById(elementId).textContent = value ? JSON.stringify(value, null, 2) : "None";
 }
 
+function formatStep(step) {
+  if (!step) {
+    return "";
+  }
+
+  const label = (step.type ?? "unknown").toUpperCase();
+  if (step.type === "key") {
+    const mods = step.modifiers ?? {};
+    const modText = ["ctrl", "meta", "alt", "shift"].filter((k) => mods[k]).join("+");
+    const keyText = step.key ?? "";
+    return `[${label}] ${modText ? `${modText}+` : ""}${keyText}`.trim();
+  }
+
+  const target = step.target ?? {};
+  const tag = target.tag ?? "unknown";
+  const id = target.id ? `#${target.id}` : "";
+  return `[${label}] ${tag}${id}`;
+}
+
+function renderStepPreview(steps) {
+  const counts = steps.reduce(
+    (acc, step) => {
+      if (step.type === "click") {
+        acc.click += 1;
+      } else if (step.type === "key") {
+        acc.key += 1;
+      } else {
+        acc.other += 1;
+      }
+      return acc;
+    },
+    { click: 0, key: 0, other: 0 }
+  );
+
+  const summaryParts = [`click: ${counts.click}`, `key: ${counts.key}`];
+  if (counts.other > 0) {
+    summaryParts.push(`other: ${counts.other}`);
+  }
+  document.getElementById("stepSummary").textContent =
+    steps.length > 0 ? `Step categories (${steps.length}): ${summaryParts.join(" | ")}` : "None";
+
+  const lines = steps.map((step) => formatStep(step));
+  document.getElementById("steps").textContent = lines.length > 0 ? lines.join("\n") : "None";
+}
+
 // Purpose: choose the default session when no explicit selection is available.
 // Inputs: persisted sessions list. Outputs: most recently updated session or null.
 function getLatestSession(sessions) {
@@ -69,7 +114,7 @@ function refreshCaptureState() {
         ? "Capturing. No session found yet."
         : "Not capturing. No session found yet.";
     renderJson("session", selectedSession);
-    renderJson("steps", sessionSteps.length > 0 ? sessionSteps : null);
+    renderStepPreview(sessionSteps);
   });
 }
 

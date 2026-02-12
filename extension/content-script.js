@@ -46,9 +46,8 @@ function buildClickPayload(event) {
 }
 
 function buildKeyPayload(event) {
-  const allowListedKeys = new Set(["Enter", "Tab", "Escape"]);
-  const isShortcut = event.ctrlKey || event.metaKey || event.altKey;
-  if (!allowListedKeys.has(event.key) && !isShortcut) {
+  const ignoredKeys = new Set(["Shift", "Control", "Alt", "Meta"]);
+  if (ignoredKeys.has(event.key)) {
     return null;
   }
 
