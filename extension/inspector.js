@@ -122,32 +122,66 @@ function setCaptureMode(messageType) {
   chrome.runtime.sendMessage({ type: messageType }, () => refreshCaptureState());
 }
 
-function exportSelectedSessionJson() {
-  chrome.storage.local.get(["sessions", "steps"], (result) => {
-    const sessions = result.sessions ?? [];
-    const allSteps = result.steps ?? [];
+function withSelectedSessionData(onResolved) {
+  chrome.storage.local.get(["sessions", "steps"], (store) => {
+    const sessions = store.sessions ?? [];
+    const allSteps = store.steps ?? [];
     const selectedSession = selectedSessionId
       ? sessions.find((x) => x.id === selectedSessionId) ?? null
       : getLatestSession(sessions);
+    const payload = selectedSession
+      ? {
+          exportedAt: Date.now(),
+          session: selectedSession,
+          steps: getSessionSteps(allSteps, selectedSession.id)
+        }
+      : null;
+    onResolved(payload);
+  });
+}
 
-    if (!selectedSession) {
+function exportSelectedSessionJson() {
+  withSelectedSessionData((payload) => {
+    if (!payload) {
       document.getElementById("status").textContent = "No selected session to export.";
       return;
     }
 
-    const payload = {
-      exportedAt: Date.now(),
-      session: selectedSession,
-      steps: getSessionSteps(allSteps, selectedSession.id)
-    };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `cap-me-session-${selectedSession.id}.json`;
+    a.download = `cap-me-session-${payload.session.id}.json`;
     a.click();
     URL.revokeObjectURL(url);
     document.getElementById("status").textContent = "Selected session exported to JSON.";
+  });
+}
+
+function copySelectedSessionJson() {
+  withSelectedSessionData(async (payload) => {
+    if (!payload) {
+      document.getElementById("status").textContent = "No selected session to copy.";
+      return;
+    }
+
+    const text = JSON.stringify(payload, null, 2);
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+      document.getElementById("status").textContent = "Selected session JSON copied to clipboard.";
+    } catch {
+      document.getElementById("status").textContent = "Clipboard copy failed.";
+    }
   });
 }
 
@@ -205,6 +239,7 @@ document.getElementById("startCapture").addEventListener("click", () => setCaptu
 document.getElementById("stopCapture").addEventListener("click", () => setCaptureMode("STOP_CAPTURE"));
 document.getElementById("refresh").addEventListener("click", refreshCaptureState);
 document.getElementById("exportJson").addEventListener("click", exportSelectedSessionJson);
+document.getElementById("copyJson").addEventListener("click", copySelectedSessionJson);
 document.getElementById("clearSelected").addEventListener("click", clearSelectedSession);
 document.getElementById("resetAll").addEventListener("click", resetAllCaptureData);
 refreshCaptureState();
