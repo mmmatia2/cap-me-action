@@ -92,9 +92,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === "STEP_CAPTURED" && sessionId) {
+      const session = sessions.find((x) => x.id === sessionId) ?? null;
       const step = {
         id: makeId("step"),
         sessionId,
+        stepIndex: (session?.stepsCount ?? 0) + 1,
         type: message.payload?.kind ?? "unknown",
         url: message.payload?.href ?? "",
         at: message.payload?.ts ?? Date.now(),
@@ -113,7 +115,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         steps.push(step);
       }
 
-      const session = sessions.find((x) => x.id === sessionId);
       if (session && !isDuplicate) {
         session.stepsCount += 1;
         session.updatedAt = step.at;

@@ -12,17 +12,18 @@ function formatStep(step) {
   }
 
   const label = (step.type ?? "unknown").toUpperCase();
+  const indexPrefix = typeof step.stepIndex === "number" ? `#${step.stepIndex} ` : "";
   if (step.type === "key") {
     const mods = step.modifiers ?? {};
     const modText = ["ctrl", "meta", "alt", "shift"].filter((k) => mods[k]).join("+");
     const keyText = step.key ?? "";
-    return `[${label}] ${modText ? `${modText}+` : ""}${keyText}`.trim();
+    return `${indexPrefix}[${label}] ${modText ? `${modText}+` : ""}${keyText}`.trim();
   }
 
   const target = step.target ?? {};
   const tag = target.tag ?? "unknown";
   const id = target.id ? `#${target.id}` : "";
-  return `[${label}] ${tag}${id}`;
+  return `${indexPrefix}[${label}] ${tag}${id}`;
 }
 
 function renderStepPreview(steps) {
@@ -64,7 +65,14 @@ function getLatestSession(sessions) {
 }
 
 function getSessionSteps(allSteps, sessionId) {
-  return allSteps.filter((x) => x.sessionId === sessionId);
+  return allSteps
+    .filter((x) => x.sessionId === sessionId)
+    .sort(
+      (a, b) =>
+        (a.stepIndex ?? Number.MAX_SAFE_INTEGER) - (b.stepIndex ?? Number.MAX_SAFE_INTEGER) ||
+        (a.at ?? 0) - (b.at ?? 0)
+    )
+    .map((step, idx) => ({ ...step, stepIndex: step.stepIndex ?? idx + 1 }));
 }
 
 function renderSessionOptions(sessions, nextSelectedId) {
