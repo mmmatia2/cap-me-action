@@ -1,0 +1,9 @@
+{
+  "name": "cap-me-action",
+  "private": true,
+  "packageManager": "pnpm@10.2.0",
+  "scripts": {
+    "dev:app": "pnpm --filter app dev",
+    "build:app": "pnpm --filter app build"
+  }
+}
