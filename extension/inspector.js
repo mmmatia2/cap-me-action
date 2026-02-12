@@ -71,6 +71,36 @@ function renderStepPreview(steps) {
 
   const lines = steps.map((step) => formatStep(step));
   document.getElementById("steps").textContent = lines.length > 0 ? lines.join("\n") : "None";
+  renderThumbnails(steps);
+}
+
+function renderThumbnails(steps) {
+  const container = document.getElementById("thumbnails");
+  const withThumbs = steps.filter((step) => Boolean(step.thumbnailDataUrl)).slice(-6);
+  if (withThumbs.length === 0) {
+    container.className = "";
+    container.textContent = "None";
+    return;
+  }
+
+  container.className = "thumb-grid";
+  container.innerHTML = "";
+  withThumbs.forEach((step) => {
+    const figure = document.createElement("figure");
+    figure.className = "thumb-item";
+
+    const img = document.createElement("img");
+    img.src = step.thumbnailDataUrl;
+    img.alt = `Step ${step.stepIndex ?? ""}`.trim();
+    img.loading = "lazy";
+
+    const caption = document.createElement("figcaption");
+    caption.textContent = `#${step.stepIndex ?? "?"} ${(step.type ?? "step").toUpperCase()}`;
+
+    figure.appendChild(img);
+    figure.appendChild(caption);
+    container.appendChild(figure);
+  });
 }
 
 // Purpose: choose the default session when no explicit selection is available.

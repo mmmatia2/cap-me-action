@@ -1,12 +1,13 @@
 ﻿# STATE
 
-- Current micro-task number: 16
+- Current micro-task number: 17
 - What’s working end-to-end:
   - Monorepo root with pnpm workspace configuration.
   - React/Vite app can inspect latest persisted `sessions` and `steps` when `chrome.storage.local` is available.
   - MV3 extension scaffold under `extension/`.
   - Extension content script sends heartbeat + click + key + input + select/toggle + navigate + scroll events to service worker.
-  - Service worker creates sessions and stores enriched steps (`selectors`, `target`, event-specific fields) in `chrome.storage.local` only while capturing is enabled, with short-window step de-duplication and per-session `stepIndex`.
+  - Service worker creates sessions and stores enriched steps (`selectors`, `target`, event-specific fields, optional `thumbnailDataUrl`) in `chrome.storage.local` only while capturing is enabled, with short-window step de-duplication and per-session `stepIndex`.
+  - Inspector can preview recent step thumbnails.
   - Extension popup (`inspector.html`) supports session selection, shows selected session steps with click/key category labels, provides start/stop controls, exports selected session JSON, can copy selected session JSON and compact steps-only JSON to clipboard, and can clear selected/all capture data.
 - Message types/payload shapes:
   - `START_CAPTURE`: `{}`
@@ -16,5 +17,5 @@
 - Data model (Session/Step):
   - CaptureState: `{ isCapturing: boolean, startedAt: number | null }`
   - Session: `{ id: string, tabId: number, startUrl: string, startTitle?: string, lastUrl?: string, lastTitle?: string, startedAt: number, updatedAt: number, stepsCount: number }`
-  - Step: `{ id: string, sessionId: string, stepIndex?: number, type: string, url: string, pageTitle?: string, at: number, key?: string | null, modifiers?: object | null, value?: string | null, inputType?: string | null, optionValue?: string | null, optionText?: string | null, checked?: boolean | null, scrollX?: number | null, scrollY?: number | null, navigationKind?: string | null, fromHref?: string | null, target?: object | null, selectors?: object | null }`
-- Next micro-task (1 line): add per-step screenshot capture and show thumbnail in inspector.
+  - Step: `{ id: string, sessionId: string, stepIndex?: number, type: string, url: string, pageTitle?: string, at: number, key?: string | null, modifiers?: object | null, value?: string | null, inputType?: string | null, optionValue?: string | null, optionText?: string | null, checked?: boolean | null, scrollX?: number | null, scrollY?: number | null, navigationKind?: string | null, fromHref?: string | null, target?: object | null, selectors?: object | null, thumbnailDataUrl?: string | null }`
+- Next micro-task (1 line): add pause/resume status badge and discard-last-step action in inspector.

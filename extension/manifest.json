@@ -3,7 +3,7 @@
   "name": "Cap Me Action Recorder",
   "version": "0.0.1",
   "description": "MV3 scaffold for capturing browser actions.",
-  "permissions": ["storage", "tabs", "scripting"],
+  "permissions": ["storage", "tabs", "scripting", "activeTab"],
   "action": {
     "default_popup": "inspector.html"
   },
