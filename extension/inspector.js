@@ -6,6 +6,14 @@ function renderJson(elementId, value) {
   document.getElementById(elementId).textContent = value ? JSON.stringify(value, null, 2) : "None";
 }
 
+function formatTargetRef(step) {
+  const target = step.target ?? {};
+  const tag = target.tag ?? "unknown";
+  const id = target.id ? `#${target.id}` : "";
+  const name = target.name ? `[name=${target.name}]` : "";
+  return `${tag}${id}${name}`;
+}
+
 function formatStep(step) {
   if (!step) {
     return "";
@@ -13,38 +21,51 @@ function formatStep(step) {
 
   const label = (step.type ?? "unknown").toUpperCase();
   const indexPrefix = typeof step.stepIndex === "number" ? `#${step.stepIndex} ` : "";
+  const targetRef = formatTargetRef(step);
+
   if (step.type === "key") {
     const mods = step.modifiers ?? {};
     const modText = ["ctrl", "meta", "alt", "shift"].filter((k) => mods[k]).join("+");
     const keyText = step.key ?? "";
-    return `${indexPrefix}[${label}] ${modText ? `${modText}+` : ""}${keyText}`.trim();
+    return `${indexPrefix}[${label}] ${modText ? `${modText}+` : ""}${keyText} on ${targetRef}`.trim();
   }
 
-  const target = step.target ?? {};
-  const tag = target.tag ?? "unknown";
-  const id = target.id ? `#${target.id}` : "";
-  return `${indexPrefix}[${label}] ${tag}${id}`;
+  if (step.type === "input") {
+    return `${indexPrefix}[${label}] ${targetRef} = "${step.value ?? ""}"`;
+  }
+
+  if (step.type === "select") {
+    const optionText = step.optionText || step.optionValue || "";
+    return `${indexPrefix}[${label}] ${targetRef} -> ${optionText}`.trim();
+  }
+
+  if (step.type === "toggle") {
+    return `${indexPrefix}[${label}] ${targetRef} = ${step.checked ? "checked" : "unchecked"}`;
+  }
+
+  if (step.type === "navigate") {
+    const title = step.pageTitle ? ` ${step.pageTitle}` : "";
+    return `${indexPrefix}[${label}]${title} (${step.url ?? ""})`.trim();
+  }
+
+  if (step.type === "scroll") {
+    return `${indexPrefix}[${label}] x:${step.scrollX ?? 0} y:${step.scrollY ?? 0}`;
+  }
+
+  return `${indexPrefix}[${label}] ${targetRef}`;
 }
 
 function renderStepPreview(steps) {
-  const counts = steps.reduce(
-    (acc, step) => {
-      if (step.type === "click") {
-        acc.click += 1;
-      } else if (step.type === "key") {
-        acc.key += 1;
-      } else {
-        acc.other += 1;
-      }
-      return acc;
-    },
-    { click: 0, key: 0, other: 0 }
-  );
+  const counts = {};
+  steps.forEach((step) => {
+    const key = step.type || "other";
+    counts[key] = (counts[key] ?? 0) + 1;
+  });
 
-  const summaryParts = [`click: ${counts.click}`, `key: ${counts.key}`];
-  if (counts.other > 0) {
-    summaryParts.push(`other: ${counts.other}`);
-  }
+  const summaryParts = Object.entries(counts)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([type, count]) => `${type}: ${count}`);
+
   document.getElementById("stepSummary").textContent =
     steps.length > 0 ? `Step categories (${steps.length}): ${summaryParts.join(" | ")}` : "None";
 
@@ -198,11 +219,20 @@ function toCompactSteps(steps) {
     i: step.stepIndex ?? null,
     t: step.type ?? "unknown",
     u: step.url ?? "",
+    ti: step.pageTitle ?? null,
     k: step.key ?? null,
     m: step.modifiers ?? null,
+    v: step.value ?? null,
+    ov: step.optionValue ?? null,
+    ot: step.optionText ?? null,
+    ch: step.checked ?? null,
+    sx: step.scrollX ?? null,
+    sy: step.scrollY ?? null,
+    nk: step.navigationKind ?? null,
     g: step.target?.tag ?? null,
     id: step.target?.id ?? null,
-    txt: step.target?.text ?? null
+    txt: step.target?.text ?? null,
+    sel: step.selectors ?? null
   }));
 }
 

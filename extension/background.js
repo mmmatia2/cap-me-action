@@ -1,4 +1,4 @@
-// Purpose: normalize extension events into Session/Step records persisted in chrome.storage.local.
+﻿// Purpose: normalize extension events into Session/Step records persisted in chrome.storage.local.
 // Inputs: START_CAPTURE/STOP_CAPTURE and capture runtime messages. Outputs: captureState, sessions, steps, sessionByTab, eventLog.
 function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -10,9 +10,17 @@ function buildStepSignature(step) {
   return [
     step.type,
     step.url,
+    step.pageTitle ?? "",
     t.tag ?? "",
     t.id ?? "",
+    t.name ?? "",
     step.key ?? "",
+    step.value ?? "",
+    step.optionValue ?? "",
+    String(step.checked ?? ""),
+    String(step.scrollX ?? ""),
+    String(step.scrollY ?? ""),
+    step.navigationKind ?? "",
     m.ctrl ? "1" : "0",
     m.meta ? "1" : "0",
     m.alt ? "1" : "0",
@@ -29,6 +37,20 @@ function findLatestSessionStep(steps, sessionId) {
   return null;
 }
 
+function createSession(sessionId, tabId, payload) {
+  return {
+    id: sessionId,
+    tabId,
+    startUrl: payload?.href ?? "",
+    startTitle: payload?.title ?? "",
+    lastUrl: payload?.href ?? "",
+    lastTitle: payload?.title ?? "",
+    startedAt: payload?.ts ?? Date.now(),
+    updatedAt: payload?.ts ?? Date.now(),
+    stepsCount: 0
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = sender.tab?.id;
   if (!message?.type) {
@@ -41,10 +63,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const steps = result.steps ?? [];
     const sessionByTab = result.sessionByTab ?? {};
     const eventLog = result.eventLog ?? [];
-    let nextCaptureState = captureState;
 
     if (message.type === "START_CAPTURE") {
-      nextCaptureState = { isCapturing: true, startedAt: Date.now() };
+      const nextCaptureState = { isCapturing: true, startedAt: Date.now() };
       chrome.storage.local.set({ captureState: nextCaptureState }, () =>
         sendResponse({ ok: true, captureState: nextCaptureState })
       );
@@ -52,7 +73,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === "STOP_CAPTURE") {
-      nextCaptureState = { isCapturing: false, startedAt: captureState.startedAt };
+      const nextCaptureState = { isCapturing: false, startedAt: captureState.startedAt };
       chrome.storage.local.set({ captureState: nextCaptureState }, () =>
         sendResponse({ ok: true, captureState: nextCaptureState })
       );
@@ -67,29 +88,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     let sessionId = sessionByTab[String(tabId)];
     if (!sessionId && message.type === "CONTENT_SCRIPT_READY") {
       sessionId = makeId("sess");
-      sessions.push({
-        id: sessionId,
-        tabId,
-        startUrl: message.payload?.href ?? "",
-        startTitle: message.payload?.title ?? "",
-        startedAt: message.payload?.ts ?? Date.now(),
-        updatedAt: message.payload?.ts ?? Date.now(),
-        stepsCount: 0
-      });
+      sessions.push(createSession(sessionId, tabId, message.payload));
       sessionByTab[String(tabId)] = sessionId;
     }
 
     if (!sessionId && message.type === "STEP_CAPTURED") {
       sessionId = makeId("sess");
-      sessions.push({
-        id: sessionId,
-        tabId,
-        startUrl: message.payload?.href ?? "",
-        startTitle: message.payload?.title ?? "",
-        startedAt: message.payload?.ts ?? Date.now(),
-        updatedAt: message.payload?.ts ?? Date.now(),
-        stepsCount: 0
-      });
+      sessions.push(createSession(sessionId, tabId, message.payload));
       sessionByTab[String(tabId)] = sessionId;
     }
 
@@ -101,10 +106,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         stepIndex: (session?.stepsCount ?? 0) + 1,
         type: message.payload?.kind ?? "unknown",
         url: message.payload?.href ?? "",
+        pageTitle: message.payload?.title ?? "",
         at: message.payload?.ts ?? Date.now(),
         key: message.payload?.key ?? null,
         modifiers: message.payload?.modifiers ?? null,
-        target: message.payload?.target ?? {}
+        value: message.payload?.value ?? null,
+        inputType: message.payload?.inputType ?? null,
+        optionValue: message.payload?.optionValue ?? null,
+        optionText: message.payload?.optionText ?? null,
+        checked: typeof message.payload?.checked === "boolean" ? message.payload.checked : null,
+        scrollX: Number.isFinite(message.payload?.scrollX) ? message.payload.scrollX : null,
+        scrollY: Number.isFinite(message.payload?.scrollY) ? message.payload.scrollY : null,
+        navigationKind: message.payload?.navigationKind ?? null,
+        fromHref: message.payload?.fromHref ?? null,
+        target: message.payload?.target ?? null,
+        selectors: message.payload?.selectors ?? null
       };
 
       const latestSessionStep = findLatestSessionStep(steps, sessionId);
@@ -120,6 +136,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (session && !isDuplicate) {
         session.stepsCount += 1;
         session.updatedAt = step.at;
+        session.lastUrl = step.url || session.lastUrl;
+        session.lastTitle = step.pageTitle || session.lastTitle;
       }
     }
 
@@ -127,7 +145,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     chrome.storage.local.set(
       {
-        captureState: nextCaptureState,
+        captureState,
         sessions: sessions.slice(-20),
         steps: steps.slice(-500),
         sessionByTab,
