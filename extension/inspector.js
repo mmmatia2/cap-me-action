@@ -193,6 +193,45 @@ function copySelectedSessionJson() {
   });
 }
 
+function toCompactSteps(steps) {
+  return steps.map((step) => ({
+    i: step.stepIndex ?? null,
+    t: step.type ?? "unknown",
+    u: step.url ?? "",
+    k: step.key ?? null,
+    m: step.modifiers ?? null,
+    g: step.target?.tag ?? null,
+    id: step.target?.id ?? null,
+    txt: step.target?.text ?? null
+  }));
+}
+
+function copyStepsOnly() {
+  withSelectedSessionData(async (payload) => {
+    if (!payload) {
+      document.getElementById("status").textContent = "No selected session steps to copy.";
+      return;
+    }
+
+    const text = JSON.stringify(toCompactSteps(payload.steps), null, 2);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+      document.getElementById("status").textContent = "Selected session steps copied.";
+    } catch {
+      document.getElementById("status").textContent = "Copy steps failed.";
+    }
+  });
+}
+
 // Purpose: clear one selected session and its related steps/tab mappings.
 // Inputs: selectedSessionId + storage state. Outputs: updated sessions/steps/sessionByTab collections.
 function clearSelectedSession() {
@@ -248,6 +287,7 @@ document.getElementById("stopCapture").addEventListener("click", () => setCaptur
 document.getElementById("refresh").addEventListener("click", refreshCaptureState);
 document.getElementById("exportJson").addEventListener("click", exportSelectedSessionJson);
 document.getElementById("copyJson").addEventListener("click", copySelectedSessionJson);
+document.getElementById("copyStepsOnly").addEventListener("click", copyStepsOnly);
 document.getElementById("clearSelected").addEventListener("click", clearSelectedSession);
 document.getElementById("resetAll").addEventListener("click", resetAllCaptureData);
 refreshCaptureState();
