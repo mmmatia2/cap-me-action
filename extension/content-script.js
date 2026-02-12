@@ -36,6 +36,7 @@ function buildClickPayload(event) {
   return {
     kind: "click",
     href: window.location.href,
+    title: document.title || "",
     ts: Date.now(),
     target: {
       tag: el.tagName.toLowerCase(),
@@ -59,6 +60,7 @@ function buildKeyPayload(event) {
   return {
     kind: "key",
     href: window.location.href,
+    title: document.title || "",
     ts: Date.now(),
     key: event.key,
     modifiers: {
@@ -76,7 +78,7 @@ function buildKeyPayload(event) {
 
 safeSendMessage({
   type: "CONTENT_SCRIPT_READY",
-  payload: { href: window.location.href, ts: Date.now() }
+  payload: { href: window.location.href, title: document.title || "", ts: Date.now() }
 });
 
 function onCaptureClick(event) {

@@ -71,6 +71,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         id: sessionId,
         tabId,
         startUrl: message.payload?.href ?? "",
+        startTitle: message.payload?.title ?? "",
         startedAt: message.payload?.ts ?? Date.now(),
         updatedAt: message.payload?.ts ?? Date.now(),
         stepsCount: 0
@@ -84,6 +85,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         id: sessionId,
         tabId,
         startUrl: message.payload?.href ?? "",
+        startTitle: message.payload?.title ?? "",
         startedAt: message.payload?.ts ?? Date.now(),
         updatedAt: message.payload?.ts ?? Date.now(),
         stepsCount: 0

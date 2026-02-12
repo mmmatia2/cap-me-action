@@ -1,6 +1,6 @@
 ﻿# STATE
 
-- Current micro-task number: 13
+- Current micro-task number: 14
 - What’s working end-to-end:
   - Monorepo root with pnpm workspace configuration.
   - React/Vite app can inspect latest persisted `sessions` and `steps` when `chrome.storage.local` is available.
@@ -11,10 +11,10 @@
 - Message types/payload shapes:
   - `START_CAPTURE`: `{}`
   - `STOP_CAPTURE`: `{}`
-  - `CONTENT_SCRIPT_READY`: `{ href: string, ts: number }`
-  - `STEP_CAPTURED`: `{ kind: "click" | "key", href: string, ts: number, target: { tag: string, id: string | null, text?: string }, key?: string, modifiers?: { ctrl: boolean, meta: boolean, alt: boolean, shift: boolean } }`
+  - `CONTENT_SCRIPT_READY`: `{ href: string, title?: string, ts: number }`
+  - `STEP_CAPTURED`: `{ kind: "click" | "key", href: string, title?: string, ts: number, target: { tag: string, id: string | null, text?: string }, key?: string, modifiers?: { ctrl: boolean, meta: boolean, alt: boolean, shift: boolean } }`
 - Data model (Session/Step):
   - CaptureState: `{ isCapturing: boolean, startedAt: number | null }`
-  - Session: `{ id: string, tabId: number, startUrl: string, startedAt: number, updatedAt: number, stepsCount: number }`
+  - Session: `{ id: string, tabId: number, startUrl: string, startTitle?: string, startedAt: number, updatedAt: number, stepsCount: number }`
   - Step: `{ id: string, sessionId: string, stepIndex?: number, type: string, url: string, at: number, key?: string | null, modifiers?: { ctrl: boolean, meta: boolean, alt: boolean, shift: boolean } | null, target: { tag: string, id: string | null, text?: string } }`
-- Next micro-task (1 line): add optional URL/title metadata on session creation for clearer exports.
+- Next micro-task (1 line): add a compact “copy steps only” export in popup for prompt-ready usage.
