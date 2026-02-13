@@ -1,6 +1,6 @@
 ﻿# STATE
 
-- Current micro-task number: 18
+- Current micro-task number: 19
 - What’s working end-to-end:
   - Monorepo root with pnpm workspace configuration.
   - React/Vite app can inspect latest persisted `sessions` and `steps` when `chrome.storage.local` is available.
@@ -9,6 +9,7 @@
   - Service worker creates sessions and stores enriched steps (`selectors`, `target`, event-specific fields, optional `thumbnailDataUrl`) in `chrome.storage.local` only while capturing is enabled, with short-window step de-duplication and per-session `stepIndex`.
   - Inspector can preview recent step thumbnails.
   - Extension popup (`inspector.html`) shows a capture status badge, supports start/stop controls, session selection, discard-last-step, exports/copies selected session data, and clear/reset actions.
+  - React app now imports exported session JSON, supports per-step instruction/note editing, and exports edited JSON.
 - Message types/payload shapes:
   - `START_CAPTURE`: `{}`
   - `STOP_CAPTURE`: `{}`
@@ -19,4 +20,4 @@
   - CaptureState: `{ isCapturing: boolean, startedAt: number | null }`
   - Session: `{ id: string, tabId: number, startUrl: string, startTitle?: string, lastUrl?: string, lastTitle?: string, startedAt: number, updatedAt: number, stepsCount: number }`
   - Step: `{ id: string, sessionId: string, stepIndex?: number, type: string, url: string, pageTitle?: string, at: number, key?: string | null, modifiers?: object | null, value?: string | null, inputType?: string | null, optionValue?: string | null, optionText?: string | null, checked?: boolean | null, scrollX?: number | null, scrollY?: number | null, navigationKind?: string | null, fromHref?: string | null, target?: object | null, selectors?: object | null, thumbnailDataUrl?: string | null }`
-- Next micro-task (1 line): integrate floating recorder control UI (use your existing UI files) against current message contracts.
+- Next micro-task (1 line): integrate `extension/ui-record-popup/index.html` into a functional MV3 popup backed by current message contracts.
