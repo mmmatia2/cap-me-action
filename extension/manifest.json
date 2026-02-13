@@ -5,7 +5,7 @@
   "description": "MV3 scaffold for capturing browser actions.",
   "permissions": ["storage", "tabs", "scripting", "activeTab"],
   "action": {
-    "default_popup": "inspector.html"
+    "default_popup": "ui-record-popup/index.html"
   },
   "background": {
     "service_worker": "background.js"
