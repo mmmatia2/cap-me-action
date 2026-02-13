@@ -10,6 +10,9 @@
       h2 { font-size: 13px; margin: 12px 0 6px; }
       button { margin-bottom: 8px; }
       pre { background: #f5f5f5; padding: 8px; border-radius: 6px; max-height: 220px; overflow: auto; }
+      .capture-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 8px; }
+      .capture-badge.capturing { background: #d9fbe3; color: #126b2e; }
+      .capture-badge.paused { background: #f5f5f5; color: #555; }
       .thumb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
       .thumb-item { border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #fff; }
       .thumb-item img { width: 100%; display: block; }
@@ -18,7 +21,7 @@
   </head>
   <body>
     <h1>Capture Inspector</h1>
-    <p id="status">Loading...</p>
+    <p id="status">Loading... <span id="captureBadge" class="capture-badge paused">PAUSED</span></p>
     <label for="sessionSelect">Session</label>
     <select id="sessionSelect"></select>
     <button id="startCapture" type="button">Start Capture</button>
@@ -27,6 +30,7 @@
     <button id="exportJson" type="button">Export Selected Session JSON</button>
     <button id="copyJson" type="button">Copy Selected Session JSON</button>
     <button id="copyStepsOnly" type="button">Copy Steps Only</button>
+    <button id="discardLast" type="button">Discard Last Step</button>
     <button id="clearSelected" type="button">Clear Selected Session</button>
     <button id="resetAll" type="button">Reset All Capture Data</button>
     <h2>Selected Session</h2>

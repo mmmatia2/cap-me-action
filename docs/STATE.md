@@ -1,6 +1,6 @@
 ﻿# STATE
 
-- Current micro-task number: 17
+- Current micro-task number: 18
 - What’s working end-to-end:
   - Monorepo root with pnpm workspace configuration.
   - React/Vite app can inspect latest persisted `sessions` and `steps` when `chrome.storage.local` is available.
@@ -8,14 +8,15 @@
   - Extension content script sends heartbeat + click + key + input + select/toggle + navigate + scroll events to service worker.
   - Service worker creates sessions and stores enriched steps (`selectors`, `target`, event-specific fields, optional `thumbnailDataUrl`) in `chrome.storage.local` only while capturing is enabled, with short-window step de-duplication and per-session `stepIndex`.
   - Inspector can preview recent step thumbnails.
-  - Extension popup (`inspector.html`) supports session selection, shows selected session steps with click/key category labels, provides start/stop controls, exports selected session JSON, can copy selected session JSON and compact steps-only JSON to clipboard, and can clear selected/all capture data.
+  - Extension popup (`inspector.html`) shows a capture status badge, supports start/stop controls, session selection, discard-last-step, exports/copies selected session data, and clear/reset actions.
 - Message types/payload shapes:
   - `START_CAPTURE`: `{}`
   - `STOP_CAPTURE`: `{}`
+  - `DISCARD_LAST_STEP`: `{ sessionId: string }`
   - `CONTENT_SCRIPT_READY`: `{ href: string, title?: string, ts: number }`
   - `STEP_CAPTURED`: `{ kind: "click" | "key" | "input" | "select" | "toggle" | "navigate" | "scroll", href: string, title?: string, ts: number, target?: object, selectors?: { css?: string, xpath?: string }, key?: string, modifiers?: object, value?: string, inputType?: string, optionValue?: string, optionText?: string, checked?: boolean, scrollX?: number, scrollY?: number, navigationKind?: string, fromHref?: string }`
 - Data model (Session/Step):
   - CaptureState: `{ isCapturing: boolean, startedAt: number | null }`
   - Session: `{ id: string, tabId: number, startUrl: string, startTitle?: string, lastUrl?: string, lastTitle?: string, startedAt: number, updatedAt: number, stepsCount: number }`
   - Step: `{ id: string, sessionId: string, stepIndex?: number, type: string, url: string, pageTitle?: string, at: number, key?: string | null, modifiers?: object | null, value?: string | null, inputType?: string | null, optionValue?: string | null, optionText?: string | null, checked?: boolean | null, scrollX?: number | null, scrollY?: number | null, navigationKind?: string | null, fromHref?: string | null, target?: object | null, selectors?: object | null, thumbnailDataUrl?: string | null }`
-- Next micro-task (1 line): add pause/resume status badge and discard-last-step action in inspector.
+- Next micro-task (1 line): integrate floating recorder control UI (use your existing UI files) against current message contracts.

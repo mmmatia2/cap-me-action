@@ -6,6 +6,22 @@ function renderJson(elementId, value) {
   document.getElementById(elementId).textContent = value ? JSON.stringify(value, null, 2) : "None";
 }
 
+function setStatusText(text) {
+  const status = document.getElementById("status");
+  if (status.firstChild && status.firstChild.nodeType === Node.TEXT_NODE) {
+    status.firstChild.textContent = `${text} `;
+    return;
+  }
+
+  status.prepend(document.createTextNode(`${text} `));
+}
+
+function setCaptureBadge(isCapturing) {
+  const badge = document.getElementById("captureBadge");
+  badge.className = `capture-badge ${isCapturing ? "capturing" : "paused"}`;
+  badge.textContent = isCapturing ? "CAPTURING" : "PAUSED";
+}
+
 function formatTargetRef(step) {
   const target = step.target ?? {};
   const tag = target.tag ?? "unknown";
@@ -165,13 +181,16 @@ function refreshCaptureState() {
       : null;
     const sessionSteps = selectedSession ? getSessionSteps(allSteps, selectedSession.id).slice(-10) : [];
 
-    document.getElementById("status").textContent = selectedSession
+    setStatusText(
+      selectedSession
       ? captureState.isCapturing
         ? "Capturing. Selected session loaded."
         : "Not capturing. Selected session loaded."
       : captureState.isCapturing
         ? "Capturing. No session found yet."
-        : "Not capturing. No session found yet.";
+        : "Not capturing. No session found yet."
+    );
+    setCaptureBadge(Boolean(captureState.isCapturing));
     renderJson("session", selectedSession);
     renderStepPreview(sessionSteps);
   });
@@ -202,7 +221,7 @@ function withSelectedSessionData(onResolved) {
 function exportSelectedSessionJson() {
   withSelectedSessionData((payload) => {
     if (!payload) {
-      document.getElementById("status").textContent = "No selected session to export.";
+      setStatusText("No selected session to export.");
       return;
     }
 
@@ -213,14 +232,14 @@ function exportSelectedSessionJson() {
     a.download = `cap-me-session-${payload.session.id}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    document.getElementById("status").textContent = "Selected session exported to JSON.";
+    setStatusText("Selected session exported to JSON.");
   });
 }
 
 function copySelectedSessionJson() {
   withSelectedSessionData(async (payload) => {
     if (!payload) {
-      document.getElementById("status").textContent = "No selected session to copy.";
+      setStatusText("No selected session to copy.");
       return;
     }
 
@@ -237,9 +256,9 @@ function copySelectedSessionJson() {
         document.execCommand("copy");
         textarea.remove();
       }
-      document.getElementById("status").textContent = "Selected session JSON copied to clipboard.";
+      setStatusText("Selected session JSON copied to clipboard.");
     } catch {
-      document.getElementById("status").textContent = "Clipboard copy failed.";
+      setStatusText("Clipboard copy failed.");
     }
   });
 }
@@ -269,7 +288,7 @@ function toCompactSteps(steps) {
 function copyStepsOnly() {
   withSelectedSessionData(async (payload) => {
     if (!payload) {
-      document.getElementById("status").textContent = "No selected session steps to copy.";
+      setStatusText("No selected session steps to copy.");
       return;
     }
 
@@ -285,11 +304,30 @@ function copyStepsOnly() {
         document.execCommand("copy");
         textarea.remove();
       }
-      document.getElementById("status").textContent = "Selected session steps copied.";
+      setStatusText("Selected session steps copied.");
     } catch {
-      document.getElementById("status").textContent = "Copy steps failed.";
+      setStatusText("Copy steps failed.");
     }
   });
+}
+
+function discardLastStep() {
+  if (!selectedSessionId) {
+    setStatusText("No selected session to discard from.");
+    return;
+  }
+
+  chrome.runtime.sendMessage(
+    { type: "DISCARD_LAST_STEP", payload: { sessionId: selectedSessionId } },
+    (response) => {
+      if (!response?.ok) {
+        setStatusText("Discard last step failed.");
+        return;
+      }
+      setStatusText(response.discarded ? "Last step discarded." : "No step to discard.");
+      refreshCaptureState();
+    }
+  );
 }
 
 // Purpose: clear one selected session and its related steps/tab mappings.
@@ -300,7 +338,7 @@ function clearSelectedSession() {
     const steps = result.steps ?? [];
     const sessionByTab = result.sessionByTab ?? {};
     if (!selectedSessionId) {
-      document.getElementById("status").textContent = "No selected session to clear.";
+      setStatusText("No selected session to clear.");
       return;
     }
 
@@ -314,7 +352,7 @@ function clearSelectedSession() {
       { sessions: nextSessions, steps: nextSteps, sessionByTab: nextSessionByTab },
       () => {
         selectedSessionId = null;
-        document.getElementById("status").textContent = "Selected session cleared.";
+        setStatusText("Selected session cleared.");
         refreshCaptureState();
       }
     );
@@ -332,7 +370,7 @@ function resetAllCaptureData() {
     },
     () => {
       selectedSessionId = null;
-      document.getElementById("status").textContent = "All capture data reset.";
+      setStatusText("All capture data reset.");
       refreshCaptureState();
     }
   );
@@ -348,6 +386,7 @@ document.getElementById("refresh").addEventListener("click", refreshCaptureState
 document.getElementById("exportJson").addEventListener("click", exportSelectedSessionJson);
 document.getElementById("copyJson").addEventListener("click", copySelectedSessionJson);
 document.getElementById("copyStepsOnly").addEventListener("click", copyStepsOnly);
+document.getElementById("discardLast").addEventListener("click", discardLastStep);
 document.getElementById("clearSelected").addEventListener("click", clearSelectedSession);
 document.getElementById("resetAll").addEventListener("click", resetAllCaptureData);
 refreshCaptureState();

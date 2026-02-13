@@ -1,5 +1,5 @@
 ﻿// Purpose: normalize extension events into Session/Step records persisted in chrome.storage.local.
-// Inputs: START_CAPTURE/STOP_CAPTURE and capture runtime messages. Outputs: captureState, sessions, steps, sessionByTab, eventLog.
+// Inputs: START_CAPTURE/STOP_CAPTURE/DISCARD_LAST_STEP and capture runtime messages. Outputs: captureState, sessions, steps, sessionByTab, eventLog.
 const lastThumbnailCaptureByTab = {};
 
 function makeId(prefix) {
@@ -159,6 +159,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const nextCaptureState = { isCapturing: false, startedAt: captureState.startedAt };
         chrome.storage.local.set({ captureState: nextCaptureState }, () =>
           sendResponse({ ok: true, captureState: nextCaptureState })
+        );
+        return;
+      }
+
+      if (message.type === "DISCARD_LAST_STEP") {
+        const sessionId = message.payload?.sessionId ?? null;
+        if (!sessionId) {
+          sendResponse({ ok: false, error: "Missing sessionId" });
+          return;
+        }
+
+        const session = sessions.find((x) => x.id === sessionId) ?? null;
+        if (!session) {
+          sendResponse({ ok: false, error: "Session not found" });
+          return;
+        }
+
+        const lastStepIndex = (() => {
+          for (let i = steps.length - 1; i >= 0; i -= 1) {
+            if (steps[i].sessionId === sessionId) {
+              return i;
+            }
+          }
+          return -1;
+        })();
+
+        if (lastStepIndex < 0) {
+          sendResponse({ ok: true, discarded: false });
+          return;
+        }
+
+        const removed = steps.splice(lastStepIndex, 1)[0];
+        const remaining = steps.filter((x) => x.sessionId === sessionId);
+        const lastRemaining = remaining[remaining.length - 1] ?? null;
+        session.stepsCount = remaining.length;
+        session.updatedAt = lastRemaining?.at ?? session.startedAt;
+        session.lastUrl = lastRemaining?.url ?? session.startUrl;
+        session.lastTitle = lastRemaining?.pageTitle ?? session.startTitle;
+
+        eventLog.push({ type: message.type, tabId: session.tabId ?? null, ts: Date.now() });
+        chrome.storage.local.set(
+          {
+            captureState,
+            sessions: sessions.slice(-20),
+            steps: steps.slice(-500),
+            sessionByTab,
+            eventLog: eventLog.slice(-100)
+          },
+          () => sendResponse({ ok: true, discarded: true, removedStepId: removed?.id ?? null })
         );
         return;
       }
