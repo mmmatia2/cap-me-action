@@ -25,6 +25,14 @@ function hasLiveExtensionContext() {
   }
 }
 
+function hasStorageApi() {
+  try {
+    return typeof chrome !== "undefined" && Boolean(chrome.storage?.local);
+  } catch {
+    return false;
+  }
+}
+
 function normalizeText(value, maxLen = 120) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, maxLen);
 }
@@ -170,8 +178,27 @@ function buildBasePayload(kind, el = null) {
   };
 }
 
+function resolveActionTarget(el) {
+  if (!(el instanceof Element)) {
+    return null;
+  }
+
+  const actionable = el.closest(
+    "button,a,[role='button'],input,textarea,select,label,[data-testid],[aria-label]"
+  );
+  if (actionable) {
+    return actionable;
+  }
+
+  if (["svg", "path", "use"].includes(el.tagName.toLowerCase())) {
+    return el.closest("button,a,[role='button'],label") ?? el.parentElement ?? el;
+  }
+
+  return el;
+}
+
 function buildClickPayload(event) {
-  const el = event.target;
+  const el = resolveActionTarget(event.target);
   if (!(el instanceof Element)) {
     return null;
   }
@@ -392,7 +419,24 @@ const DOCK_EXPANDED = { width: 400, height: 72 };
 const DOCK_MINIMIZED = { width: 220, height: 64 };
 
 function sendRuntimeMessage(message) {
-  return new Promise((resolve) => chrome.runtime.sendMessage(message, resolve));
+  return new Promise((resolve) => {
+    if (!hasLiveExtensionContext()) {
+      resolve({ ok: false, error: "Extension context unavailable" });
+      return;
+    }
+
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({ ok: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+        resolve(response);
+      });
+    } catch (error) {
+      resolve({ ok: false, error: String(error) });
+    }
+  });
 }
 
 function getCurrentDockSize() {
@@ -426,14 +470,31 @@ function applyDockFrameStyle() {
 }
 
 function persistDockUi() {
-  chrome.storage.local.set({ dockUi });
+  if (!hasStorageApi()) {
+    return;
+  }
+  try {
+    chrome.storage.local.set({ dockUi });
+  } catch {
+    return;
+  }
 }
 
 async function ensureDockUiLoaded() {
   if (dockUiLoaded || !hasLiveExtensionContext()) {
     return;
   }
-  const store = await new Promise((resolve) => chrome.storage.local.get(["dockUi"], resolve));
+  if (!hasStorageApi()) {
+    dockUiLoaded = true;
+    return;
+  }
+  const store = await new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(["dockUi"], (result) => resolve(result ?? {}));
+    } catch {
+      resolve({});
+    }
+  });
   const stored = store.dockUi ?? null;
   if (stored && typeof stored === "object") {
     dockUi = {
@@ -494,25 +555,29 @@ async function refreshDockState() {
     removeFloatingDock();
     return;
   }
-  await ensureDockUiLoaded();
+  try {
+    await ensureDockUiLoaded();
 
-  const response = await sendRuntimeMessage({ type: "GET_DOCK_STATE" });
-  if (!response?.ok) {
+    const response = await sendRuntimeMessage({ type: "GET_DOCK_STATE" });
+    if (!response?.ok) {
+      removeFloatingDock();
+      return;
+    }
+
+    dockState.isCapturing = Boolean(response.isCapturing);
+    dockState.startedAt = response.startedAt ?? null;
+    dockState.stepCount = response.stepsCount ?? 0;
+
+    if (dockState.isCapturing) {
+      ensureFloatingDock();
+      applyDockFrameStyle();
+      postDockState();
+      return;
+    }
     removeFloatingDock();
-    return;
+  } catch {
+    removeFloatingDock();
   }
-
-  dockState.isCapturing = Boolean(response.isCapturing);
-  dockState.startedAt = response.startedAt ?? null;
-  dockState.stepCount = response.stepsCount ?? 0;
-
-  if (dockState.isCapturing) {
-    ensureFloatingDock();
-    applyDockFrameStyle();
-    postDockState();
-    return;
-  }
-  removeFloatingDock();
 }
 
 window.addEventListener("message", (event) => {
@@ -569,14 +634,16 @@ window.addEventListener("message", (event) => {
   }
 });
 
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local") {
-    return;
-  }
-  if (changes.captureState || changes.steps) {
-    refreshDockState();
-  }
-});
+if (chrome?.storage?.onChanged?.addListener) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") {
+      return;
+    }
+    if (changes.captureState || changes.steps) {
+      refreshDockState();
+    }
+  });
+}
 
 window.addEventListener("resize", () => {
   if (!floatingDockFrame) {

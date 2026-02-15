@@ -7,12 +7,82 @@ function normalizeText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function sanitizeLabel(value) {
+  const text = normalizeText(value);
+  if (!text) {
+    return "";
+  }
+
+  const lower = text.toLowerCase();
+  const looksLikeAsset =
+    /^\/?assets\/.+\.(js|css|map|png|jpg|jpeg|svg|webp)(\?.*)?$/i.test(text) ||
+    /^https?:\/\/.+\/assets\/.+\.(js|css|map|png|jpg|jpeg|svg|webp)(\?.*)?$/i.test(text);
+  const noisyTag = ["svg", "path", "use", "g"].includes(lower);
+
+  if (looksLikeAsset || noisyTag) {
+    return "";
+  }
+
+  return text;
+}
+
+function selectorToLabel(selector) {
+  const text = sanitizeLabel(selector);
+  if (!text) {
+    return "";
+  }
+
+  // Drop long ancestry selectors; they are noisy and brittle.
+  if (text.includes(">")) {
+    return "";
+  }
+
+  const normalized = text.replace(/:nth-of-type\(\d+\)/g, "").trim();
+  if (!normalized || /^[a-z]+$/i.test(normalized)) {
+    return "";
+  }
+
+  // Prefer the most specific chunk of a selector.
+  const lastToken = normalized.split(/\s+/).pop() || "";
+  if (!lastToken || /^[a-z]+$/i.test(lastToken)) {
+    return "";
+  }
+  return lastToken;
+}
+
+function semanticFallback(step) {
+  const tag = normalizeText(step.target?.tag).toLowerCase();
+  const role = normalizeText(step.target?.role).toLowerCase();
+  const type = normalizeText(step.target?.type).toLowerCase();
+
+  if (role === "button" || tag === "button") {
+    return "button";
+  }
+  if (tag === "a") {
+    return "link";
+  }
+  if (tag === "input") {
+    return type ? `${type} input` : "input";
+  }
+  if (tag === "select") {
+    return "dropdown";
+  }
+  if (tag === "textarea") {
+    return "text area";
+  }
+  return "";
+}
+
 function targetLabel(step) {
+  const selectorHint = selectorToLabel(step.selectors?.css);
   return (
-    normalizeText(step.target?.label) ||
-    normalizeText(step.target?.text) ||
-    normalizeText(step.target?.id ? `#${step.target.id}` : "") ||
-    normalizeText(step.target?.tag) ||
+    sanitizeLabel(step.target?.label) ||
+    sanitizeLabel(step.target?.text) ||
+    sanitizeLabel(step.target?.id ? `#${step.target.id}` : "") ||
+    sanitizeLabel(step.target?.name ? `[${step.target.name}]` : "") ||
+    sanitizeLabel(selectorHint) ||
+    semanticFallback(step) ||
+    sanitizeLabel(step.target?.tag) ||
     "target"
   );
 }
