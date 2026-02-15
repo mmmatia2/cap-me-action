@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 // Purpose: provide a practical step editor for exported recorder sessions.
-// Inputs: exported session JSON files and in-app edits to title/instruction/note/order.
-// Outputs: edited JSON export and markdown procedure export for team sharing.
+// Inputs: exported session JSON files, extension storage sessions, and in-app edits.
+// Outputs: edited JSON export plus markdown/html procedure exports for team sharing.
 function normalizeText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -177,6 +177,46 @@ function asMarkdown(payload) {
   return [...header, ...body].join("\n");
 }
 
+function asHtml(payload) {
+  const sessionTitle = payload.session?.lastTitle || payload.session?.startTitle || payload.session?.id || "Procedure";
+  const lines = payload.steps
+    .map((step) => {
+      const note = step.note ? `<p class="note"><strong>Note:</strong> ${step.note}</p>` : "";
+      const url = step.url ? `<p class="url"><strong>URL:</strong> ${step.url}</p>` : "";
+      return `
+        <section class="step">
+          <h2>${step.stepIndex}. ${step.title}</h2>
+          <p>${step.instruction || ""}</p>
+          ${note}
+          ${url}
+        </section>`;
+    })
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${sessionTitle}</title>
+    <style>
+      body { font-family: "Segoe UI", sans-serif; max-width: 920px; margin: 24px auto; padding: 0 16px; color: #0f172a; }
+      h1 { margin-bottom: 6px; }
+      .meta { color: #475569; margin-top: 0; }
+      .step { border: 1px solid #dbe4f0; border-radius: 10px; padding: 12px 14px; margin: 12px 0; background: #f8fafc; }
+      .step h2 { margin: 0 0 6px; font-size: 18px; }
+      .step p { margin: 0 0 8px; line-height: 1.45; }
+      .note, .url { color: #334155; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <h1>${sessionTitle}</h1>
+    <p class="meta">Generated ${new Date().toLocaleString()}</p>
+    ${lines}
+  </body>
+</html>`;
+}
+
 function getPalette(theme) {
   if (theme === "light") {
     return {
@@ -201,6 +241,53 @@ function getPalette(theme) {
   };
 }
 
+function loadSessionsViaPageBridge(timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    const requestId = `cap_me_bridge_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    let settled = false;
+
+    const cleanup = () => {
+      window.removeEventListener("message", onMessage);
+      clearTimeout(timer);
+    };
+
+    const finish = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+
+    const onMessage = (event) => {
+      if (event.source !== window) {
+        return;
+      }
+      const data = event.data;
+      if (!data || data.channel !== "CAP_ME_APP_BRIDGE" || data.type !== "SESSIONS_RESPONSE") {
+        return;
+      }
+      if (data.requestId !== requestId) {
+        return;
+      }
+      finish({
+        ok: Boolean(data.ok),
+        sessions: data.sessions ?? [],
+        steps: data.steps ?? [],
+        error: data.error ?? null
+      });
+    };
+
+    const timer = setTimeout(() => {
+      finish({ ok: false, sessions: [], steps: [], error: "bridge_timeout" });
+    }, timeoutMs);
+
+    window.addEventListener("message", onMessage);
+    window.postMessage({ channel: "CAP_ME_APP_BRIDGE", type: "REQUEST_SESSIONS", requestId }, "*");
+  });
+}
+
 function buttonStyle(palette, disabled = false) {
   return {
     border: `1px solid ${palette.border}`,
@@ -217,7 +304,13 @@ export default function App() {
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [theme, setTheme] = useState("dark");
+  const [extensionSessions, setExtensionSessions] = useState([]);
+  const [extensionSteps, setExtensionSteps] = useState([]);
+  const [selectedExtensionSessionId, setSelectedExtensionSessionId] = useState("");
+  const [extensionStatus, setExtensionStatus] = useState("");
   const palette = getPalette(theme);
+  const hasExtensionStorage =
+    typeof chrome !== "undefined" && Boolean(chrome.storage?.local) && Boolean(chrome.runtime?.id);
 
   useEffect(() => {
     // Purpose: keep page chrome visually consistent with the selected editor theme.
@@ -325,6 +418,67 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function exportHtml() {
+    if (!payload) {
+      return;
+    }
+    const blob = new Blob([asHtml(payload)], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cap-me-guide-${payload.session?.id || "session"}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function loadFromExtensionStorage() {
+    if (hasExtensionStorage) {
+      chrome.storage.local.get(["sessions", "steps"], (result) => {
+        const sessions = (result.sessions ?? []).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+        const steps = result.steps ?? [];
+        setExtensionSessions(sessions);
+        setExtensionSteps(steps);
+        setSelectedExtensionSessionId(sessions[0]?.id ?? "");
+        setExtensionStatus(sessions.length ? `Loaded ${sessions.length} session(s) from extension.` : "No sessions found in extension storage.");
+      });
+      return;
+    }
+
+    loadSessionsViaPageBridge().then((response) => {
+      if (!response.ok) {
+        setExtensionStatus("Extension bridge unavailable. Reload extension, refresh this page, then try again.");
+        return;
+      }
+      const sessions = [...response.sessions].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+      const steps = response.steps ?? [];
+      setExtensionSessions(sessions);
+      setExtensionSteps(steps);
+      setSelectedExtensionSessionId(sessions[0]?.id ?? "");
+      setExtensionStatus(sessions.length ? `Loaded ${sessions.length} session(s) from extension.` : "No sessions found in extension storage.");
+    });
+  }
+
+  function importSelectedExtensionSession() {
+    if (!selectedExtensionSessionId) {
+      return;
+    }
+
+    const session = extensionSessions.find((x) => x.id === selectedExtensionSessionId);
+    if (!session) {
+      setExtensionStatus("Selected extension session was not found.");
+      return;
+    }
+
+    const steps = extensionSteps
+      .filter((x) => x.sessionId === session.id)
+      .sort((a, b) => (a.stepIndex ?? 0) - (b.stepIndex ?? 0) || (a.at ?? 0) - (b.at ?? 0));
+    const normalized = normalizePayload({ session, steps });
+    setPayload(normalized);
+    setSelectedId(normalized.steps[0]?.id || null);
+    setError("");
+    setExtensionStatus(`Imported session ${session.id} (${steps.length} steps).`);
+  }
+
   return (
     <main
       style={{
@@ -361,7 +515,35 @@ export default function App() {
         <button type="button" onClick={exportMarkdown} disabled={!payload} style={{ ...buttonStyle(palette, !payload), marginLeft: 8 }}>
           Export Markdown
         </button>
+        <button type="button" onClick={exportHtml} disabled={!payload} style={{ ...buttonStyle(palette, !payload), marginLeft: 8 }}>
+          Export HTML
+        </button>
       </div>
+      <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button type="button" onClick={loadFromExtensionStorage} style={buttonStyle(palette, false)}>
+          Load From Extension
+        </button>
+        <select
+          value={selectedExtensionSessionId}
+          onChange={(event) => setSelectedExtensionSessionId(event.target.value)}
+          style={{ padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text, minWidth: 260 }}
+          disabled={!extensionSessions.length}
+        >
+          {!extensionSessions.length ? (
+            <option value="">No extension sessions loaded</option>
+          ) : (
+            extensionSessions.map((session) => (
+              <option key={session.id} value={session.id}>
+                {session.id} ({session.stepsCount} steps)
+              </option>
+            ))
+          )}
+        </select>
+        <button type="button" onClick={importSelectedExtensionSession} style={buttonStyle(palette, !selectedExtensionSessionId)} disabled={!selectedExtensionSessionId}>
+          Import Selected Session
+        </button>
+      </div>
+      {extensionStatus ? <p style={{ marginTop: 8, color: palette.textSoft }}>{extensionStatus}</p> : null}
       {error ? <p style={{ color: "#ef4444" }}>{error}</p> : null}
 
       {!payload ? (

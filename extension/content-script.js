@@ -638,6 +638,61 @@ window.addEventListener("message", (event) => {
   }
 });
 
+window.addEventListener("message", (event) => {
+  if (event.source !== window) {
+    return;
+  }
+  const data = event.data;
+  if (!data || data.channel !== "CAP_ME_APP_BRIDGE") {
+    return;
+  }
+  if (data.type !== "REQUEST_SESSIONS") {
+    return;
+  }
+
+  if (!hasStorageApi()) {
+    window.postMessage(
+      {
+        channel: "CAP_ME_APP_BRIDGE",
+        type: "SESSIONS_RESPONSE",
+        requestId: data.requestId,
+        ok: false,
+        error: "storage_unavailable"
+      },
+      "*"
+    );
+    return;
+  }
+
+  try {
+    chrome.storage.local.get(["sessions", "steps"], (result) => {
+      const payload = result ?? {};
+      window.postMessage(
+        {
+          channel: "CAP_ME_APP_BRIDGE",
+          type: "SESSIONS_RESPONSE",
+          requestId: data.requestId,
+          ok: true,
+          sessions: payload.sessions ?? [],
+          steps: payload.steps ?? []
+        },
+        "*"
+      );
+    });
+  } catch {
+    window.postMessage(
+      {
+        channel: "CAP_ME_APP_BRIDGE",
+        type: "SESSIONS_RESPONSE",
+        requestId: data.requestId,
+        ok: false,
+        error: "storage_read_failed"
+      },
+      "*"
+    );
+  }
+});
+
 if (chrome?.storage?.onChanged?.addListener) {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local") {
