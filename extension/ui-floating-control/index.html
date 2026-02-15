@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Floating Recorder Dock</title>
+    <link rel="stylesheet" href="../shared-ui/tokens.css" />
+    <style>
+      :root { color-scheme: dark; }
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      .dock {
+        width: 100%;
+        height: 60px;
+        overflow: hidden;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 10px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(15, 18, 24, 0.92);
+        box-shadow: 0 10px 26px rgba(0,0,0,0.42);
+      }
+      #dockDragHandle { width: 20px; height: 20px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16); cursor: move; }
+      .live { width: 8px; height: 8px; border-radius: 999px; background: #ff4f5e; box-shadow: 0 0 10px rgba(255,79,94,0.7); }
+      #dockTimer { font-family: Consolas, monospace; font-size: 16px; color: #eef2ff; }
+      .step-pill {
+        border: 1px solid rgba(255,255,255,0.14);
+        background: rgba(255,255,255,0.05);
+        border-radius: 999px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+      }
+      .step-pill small { font-size: 10px; color: #8f99ad; text-transform: uppercase; }
+      #dockStepCount { font-weight: 700; color: #fff; font-size: 14px; }
+      .spacer { flex: 1; }
+      .actions { display: flex; align-items: center; gap: 2px; }
+      button {
+        width: 30px; height: 30px; border-radius: 999px;
+        border: 0; background: transparent; color: #b5bfce; cursor: pointer; font-size: 11px; font-weight: 700;
+      }
+      button:hover { background: rgba(255,255,255,0.08); color: #fff; }
+      button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      #dockFinish {
+        width: 34px; height: 34px; background: radial-gradient(circle at 35% 35%, #ff5f66, #d8252e);
+        color: #fff; border: 1px solid rgba(255,255,255,0.24);
+      }
+      #dockDiscard:hover { color: #ff7a80; }
+      #dockMinimize:hover { color: #93a6cd; }
+      #dockToast {
+        position: absolute; left: 50%; transform: translateX(-50%); top: 4px;
+        color: #d8e1f5; font-size: 12px; background: rgba(14, 18, 24, 0.9);
+        border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 4px 10px;
+        opacity: 0; transition: opacity .2s ease;
+      }
+      #dockToast.show { opacity: 1; }
+      .dock.minimized .live,
+      .dock.minimized #dockTimer,
+      .dock.minimized .step-pill,
+      .dock.minimized .spacer {
+        display: none;
+      }
+      .dock.minimized {
+        justify-content: space-between;
+        padding: 0 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="dockRoot" class="dock">
+      <div id="dockDragHandle" tabindex="0" aria-label="Drag Dock"></div>
+      <div class="live" aria-hidden="true"></div>
+      <span id="dockTimer">00:00</span>
+      <div class="step-pill"><small>Step</small><span id="dockStepCount">0</span></div>
+      <div class="spacer"></div>
+      <div class="actions">
+        <button id="dockDiscard" aria-label="Discard">
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4h10l1 2h4v2h-2l-1 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 8H2V6h4l1-2zm2 0l-.5 1h7L15 4H9zm0 6v9h2v-9H9zm4 0v9h2v-9h-2z"/></svg>
+        </button>
+        <button id="dockPause" aria-label="Pause Or Resume">
+          <span id="dockPauseIcon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>
+          </span>
+        </button>
+        <button id="dockFinish" aria-label="Finish Recording">
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 7h10v10H7z"/></svg>
+        </button>
+        <button id="dockMinimize" aria-label="Minimize">
+          <svg id="dockMinimizeIcon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 12h14v2H5z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="dockToast">Step discarded</div>
+    <script src="dock.js"></script>
+  </body>
+</html>

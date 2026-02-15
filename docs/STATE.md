@@ -1,15 +1,47 @@
-# STATE
+﻿# STATE
 
-- Current micro-task number: 1
-- What�s working end-to-end:
+- Current micro-task number: 29
+- What’s working end-to-end:
   - Monorepo root with pnpm workspace configuration.
-  - React/Vite web app scaffold under `app/`.
+  - React/Vite app can inspect latest persisted `sessions` and `steps` when `chrome.storage.local` is available.
   - MV3 extension scaffold under `extension/`.
-  - Extension content script sends heartbeat to service worker.
-  - Service worker stores rolling event log in `chrome.storage.local`.
+  - Extension content script sends heartbeat + click + key + input + select/toggle + navigate + scroll events to service worker.
+  - Service worker creates sessions and stores enriched steps (`selectors`, `target`, event-specific fields, optional `thumbnailDataUrl`) in `chrome.storage.local` only while capturing is enabled, with short-window step de-duplication and per-session `stepIndex`.
+  - Service worker now captures higher-resolution thumbnails with adaptive compression, so app screenshot previews remain readable while staying within storage limits.
+  - Service worker now runs storage/schema migration (`storageVersion` + `schemaVersion`) and adds session sync metadata compatibility.
+  - Service worker now includes MV3-safe sync queue scaffolding with `chrome.alarms` retries and runtime sync commands (`SYNC_SESSION_BY_ID`, `SYNC_LAST_SESSION`, `GET_SYNC_STATUS`).
+  - Inspector can preview recent step thumbnails.
+  - Inspector now includes sync status/actions and editor handoff while preserving capture/export/reset controls.
+  - React app now imports exported session JSON, supports per-step instruction/note editing, and exports edited JSON.
+  - React app now supports editable step titles, step reorder/delete controls, and Markdown export for team-friendly procedures.
+  - React app now includes light/dark editor theming and stronger title sanitization against selector-chain noise.
+  - React app now supports drag-and-drop step ordering and cleaner fallback labels for noisy selector targets.
+  - React app now supports direct session loading from extension storage (`chrome.storage.local`) and HTML guide export templates.
+  - React app now supports session loading via content-script bridge when running on `localhost` without direct chrome API access.
+  - React app now uses schema-aware migration helpers (`contracts.ts`, `migrations.ts`) for import/export compatibility.
+  - React app now supports a dual source model (`Local` extension + `Team` Apps Script endpoint scaffold) while keeping existing local bridge path.
+  - React app now supports inline screenshot highlight boxes per step, with highlight labels persisted into JSON and included in Markdown/HTML exports.
+  - React app HTML export now includes embedded step screenshots and rendered highlight overlays/labels.
+  - Content script now supports recorder hotkeys: `Alt+Shift+R` (start/stop), `Alt+Shift+Z` (discard last), `Alt+Shift+M` (dock minimize).
+  - Action popup now points to `ui-record-popup/index.html` with working start/stop capture and recent-session summaries, plus links to open the advanced inspector view.
+  - Action popup now includes direct \"Open Last Capture In Editor\" and \"Download Last Capture JSON\" actions, with hotkey copy aligned to actual shortcuts.
+  - Content script now injects a floating recorder dock from `ui-floating-control/index.html` while capture is active, with live timer/step count and pause/finish controls.
+  - Action popup now uses local MV3-safe CSS/HTML (no remote Tailwind runtime), aligned to Stitch visuals while preserving existing capture/session wiring.
+  - Floating dock now has local CSS compact styling, per-tab step count via `GET_DOCK_STATE`, and working `Discard Last Step` action with in-dock feedback.
+  - Floating dock now supports drag-to-reposition with persisted placement (`dockUi`) and minimize/restore behavior.
 - Message types/payload shapes:
-  - `CONTENT_SCRIPT_READY`: `{ href: string, ts: number }`
+  - `START_CAPTURE`: `{}`
+  - `STOP_CAPTURE`: `{}`
+  - `DISCARD_LAST_STEP`: `{ sessionId: string }`
+  - `GET_DOCK_STATE`: `{}`
+  - `CONTENT_SCRIPT_READY`: `{ href: string, title?: string, ts: number }`
+  - `STEP_CAPTURED`: `{ kind: "click" | "key" | "input" | "select" | "toggle" | "navigate" | "scroll", href: string, title?: string, ts: number, target?: object, selectors?: { css?: string, xpath?: string }, key?: string, modifiers?: object, value?: string, inputType?: string, optionValue?: string, optionText?: string, checked?: boolean, scrollX?: number, scrollY?: number, navigationKind?: string, fromHref?: string }`
+  - `SYNC_SESSION_BY_ID`: `{ sessionId: string }`
+  - `SYNC_LAST_SESSION`: `{}`
+  - `GET_SYNC_STATUS`: `{ sessionId?: string }`
+  - `OPEN_EDITOR`: `{ source?: "local" | "team", sessionId?: string }`
 - Data model (Session/Step):
-  - Session: not yet implemented.
-  - Step: not yet implemented.
-- Next micro-task (1 line): add explicit Session/Step schema + first captured click step.
+  - CaptureState: `{ isCapturing: boolean, startedAt: number | null }`
+  - Session: `{ id: string, tabId: number, startUrl: string, startTitle?: string, lastUrl?: string, lastTitle?: string, startedAt: number, updatedAt: number, stepsCount: number, sync?: { status: \"local\" | \"pending\" | \"synced\" | \"failed\" | \"blocked\", revision?: number | null, lastSyncedAt?: number | null, errorCode?: string | null } }`
+  - Step: `{ id: string, sessionId: string, stepIndex?: number, type: string, url: string, pageTitle?: string, at: number, key?: string | null, modifiers?: object | null, value?: string | null, inputType?: string | null, optionValue?: string | null, optionText?: string | null, checked?: boolean | null, scrollX?: number | null, scrollY?: number | null, navigationKind?: string | null, fromHref?: string | null, target?: object | null, selectors?: object | null, thumbnailDataUrl?: string | null, annotations?: [{ id: string, x: number, y: number, width: number, height: number, label?: string }] }`
+- Next micro-task (1 line): implement authenticated Apps Script endpoint wiring + team session browser/import flow validation against a real Drive folder.
