@@ -1,19 +1,23 @@
 ﻿# STATE
 
-- Current micro-task number: 27
+- Current micro-task number: 28
 - What’s working end-to-end:
   - Monorepo root with pnpm workspace configuration.
   - React/Vite app can inspect latest persisted `sessions` and `steps` when `chrome.storage.local` is available.
   - MV3 extension scaffold under `extension/`.
   - Extension content script sends heartbeat + click + key + input + select/toggle + navigate + scroll events to service worker.
   - Service worker creates sessions and stores enriched steps (`selectors`, `target`, event-specific fields, optional `thumbnailDataUrl`) in `chrome.storage.local` only while capturing is enabled, with short-window step de-duplication and per-session `stepIndex`.
+  - Service worker now captures higher-resolution thumbnails with adaptive compression, so app screenshot previews remain readable while staying within storage limits.
   - Inspector can preview recent step thumbnails.
   - Extension popup (`inspector.html`) shows a capture status badge, supports start/stop controls, session selection, discard-last-step, exports/copies selected session data, and clear/reset actions.
   - React app now imports exported session JSON, supports per-step instruction/note editing, and exports edited JSON.
   - React app now supports editable step titles, step reorder/delete controls, and Markdown export for team-friendly procedures.
   - React app now includes light/dark editor theming and stronger title sanitization against selector-chain noise.
+  - React app now supports drag-and-drop step ordering and cleaner fallback labels for noisy selector targets.
   - React app now supports direct session loading from extension storage (`chrome.storage.local`) and HTML guide export templates.
   - React app now supports session loading via content-script bridge when running on `localhost` without direct chrome API access.
+  - React app now supports inline screenshot highlight boxes per step, with highlight labels persisted into JSON and included in Markdown/HTML exports.
+  - React app HTML export now includes embedded step screenshots and rendered highlight overlays/labels.
   - Content script now supports recorder hotkeys: `Alt+Shift+R` (start/stop), `Alt+Shift+Z` (discard last), `Alt+Shift+M` (dock minimize).
   - Action popup now points to `ui-record-popup/index.html` with working start/stop capture and recent-session summaries, plus links to open the advanced inspector view.
   - Content script now injects a floating recorder dock from `ui-floating-control/index.html` while capture is active, with live timer/step count and pause/finish controls.
@@ -30,5 +34,5 @@
 - Data model (Session/Step):
   - CaptureState: `{ isCapturing: boolean, startedAt: number | null }`
   - Session: `{ id: string, tabId: number, startUrl: string, startTitle?: string, lastUrl?: string, lastTitle?: string, startedAt: number, updatedAt: number, stepsCount: number }`
-  - Step: `{ id: string, sessionId: string, stepIndex?: number, type: string, url: string, pageTitle?: string, at: number, key?: string | null, modifiers?: object | null, value?: string | null, inputType?: string | null, optionValue?: string | null, optionText?: string | null, checked?: boolean | null, scrollX?: number | null, scrollY?: number | null, navigationKind?: string | null, fromHref?: string | null, target?: object | null, selectors?: object | null, thumbnailDataUrl?: string | null }`
-- Next micro-task (1 line): add app-side step thumbnails and optional redaction blocks in exported guides.
+- Step: `{ id: string, sessionId: string, stepIndex?: number, type: string, url: string, pageTitle?: string, at: number, key?: string | null, modifiers?: object | null, value?: string | null, inputType?: string | null, optionValue?: string | null, optionText?: string | null, checked?: boolean | null, scrollX?: number | null, scrollY?: number | null, navigationKind?: string | null, fromHref?: string | null, target?: object | null, selectors?: object | null, thumbnailDataUrl?: string | null, annotations?: [{ id: string, x: number, y: number, width: number, height: number, label?: string }] }`
+- Next micro-task (1 line): align the React editor shell with the StepFlow handoff UI while keeping existing import/export behavior.

@@ -1,6 +1,14 @@
 ﻿// Purpose: normalize extension events into Session/Step records persisted in chrome.storage.local.
 // Inputs: START_CAPTURE/STOP_CAPTURE/DISCARD_LAST_STEP and capture runtime messages. Outputs: captureState, sessions, steps, sessionByTab, eventLog.
 const lastThumbnailCaptureByTab = {};
+// Purpose: keep thumbnails readable for editor annotation while staying within storage limits.
+// Inputs: raw visible-tab image size. Outputs: adaptively compressed JPEG thumbnail data URLs.
+const THUMBNAIL_CAPTURE_CONFIG = {
+  maxWidth: 1280,
+  maxHeight: 800,
+  maxBytes: 220 * 1024,
+  qualitySteps: [0.9, 0.84, 0.78, 0.72, 0.66, 0.58]
+};
 
 function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -59,7 +67,7 @@ function shouldCaptureThumbnail(type) {
 
 function captureVisibleTab(windowId) {
   return new Promise((resolve) => {
-    chrome.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 35 }, (dataUrl) => {
+    chrome.tabs.captureVisibleTab(windowId, { format: "png" }, (dataUrl) => {
       if (chrome.runtime.lastError || !dataUrl) {
         resolve(null);
         return;
@@ -80,7 +88,7 @@ async function blobToBase64(blob) {
   return btoa(binary);
 }
 
-async function compressThumbnail(dataUrl, maxWidth = 360, quality = 0.45) {
+async function compressThumbnail(dataUrl, options = THUMBNAIL_CAPTURE_CONFIG) {
   try {
     if (typeof OffscreenCanvas === "undefined" || typeof createImageBitmap !== "function") {
       return dataUrl;
@@ -89,20 +97,49 @@ async function compressThumbnail(dataUrl, maxWidth = 360, quality = 0.45) {
     const response = await fetch(dataUrl);
     const blob = await response.blob();
     const bitmap = await createImageBitmap(blob);
-    const scale = Math.min(1, maxWidth / bitmap.width);
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
+    try {
+      const maxScaleByWidth = options.maxWidth / bitmap.width;
+      const maxScaleByHeight = options.maxHeight / bitmap.height;
+      const baseScale = Math.min(1, maxScaleByWidth, maxScaleByHeight);
+      let width = Math.max(1, Math.round(bitmap.width * baseScale));
+      let height = Math.max(1, Math.round(bitmap.height * baseScale));
+      let fallbackBlob = null;
 
-    const canvas = new OffscreenCanvas(width, height);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      return dataUrl;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const canvas = new OffscreenCanvas(width, height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          return dataUrl;
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(bitmap, 0, 0, width, height);
+
+        for (const quality of options.qualitySteps) {
+          const candidateBlob = await canvas.convertToBlob({ type: "image/jpeg", quality });
+          fallbackBlob = candidateBlob;
+          if (candidateBlob.size <= options.maxBytes) {
+            const base64 = await blobToBase64(candidateBlob);
+            return `data:${candidateBlob.type};base64,${base64}`;
+          }
+        }
+
+        if (width <= 640 || height <= 360) {
+          break;
+        }
+        width = Math.max(640, Math.round(width * 0.85));
+        height = Math.max(360, Math.round(height * 0.85));
+      }
+
+      if (!fallbackBlob) {
+        return dataUrl;
+      }
+      const base64 = await blobToBase64(fallbackBlob);
+      return `data:${fallbackBlob.type};base64,${base64}`;
+    } finally {
+      bitmap.close?.();
     }
-
-    ctx.drawImage(bitmap, 0, 0, width, height);
-    const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality });
-    const base64 = await blobToBase64(outBlob);
-    return `data:${outBlob.type};base64,${base64}`;
   } catch {
     return dataUrl;
   }
@@ -130,7 +167,7 @@ async function maybeCaptureThumbnail(sender, stepType) {
     return null;
   }
 
-  return compressThumbnail(raw);
+  return compressThumbnail(raw, THUMBNAIL_CAPTURE_CONFIG);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

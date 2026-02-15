@@ -1,10 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 // Purpose: provide a practical step editor for exported recorder sessions.
 // Inputs: exported session JSON files, extension storage sessions, and in-app edits.
 // Outputs: edited JSON export plus markdown/html procedure exports for team sharing.
 function normalizeText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function clampUnit(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, num));
 }
 
 function sanitizeLabel(value) {
@@ -26,25 +34,110 @@ function sanitizeLabel(value) {
   return text;
 }
 
+function humanizeIdentifier(value) {
+  return normalizeText(
+    String(value ?? "")
+      .replace(/:nth-of-type\(\d+\)/g, " ")
+      .replace(/[#.[\]()"'`]/g, " ")
+      .replace(/[_-]+/g, " ")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/\s+/g, " ")
+  );
+}
+
+const WEAK_LABELS = new Set([
+  "a",
+  "article",
+  "aside",
+  "button",
+  "div",
+  "form",
+  "g",
+  "header",
+  "i",
+  "img",
+  "input",
+  "label",
+  "li",
+  "nav",
+  "option",
+  "p",
+  "path",
+  "section",
+  "select",
+  "span",
+  "svg",
+  "textarea",
+  "ul"
+]);
+
+function cleanCandidate(value) {
+  const sanitized = sanitizeLabel(value);
+  if (!sanitized) {
+    return "";
+  }
+  const cleaned = humanizeIdentifier(sanitized);
+  if (!cleaned || cleaned.length < 2) {
+    return "";
+  }
+  if (/^[\d\W]+$/.test(cleaned)) {
+    return "";
+  }
+  return cleaned;
+}
+
+function isWeakLabel(value) {
+  const cleaned = cleanCandidate(value);
+  if (!cleaned) {
+    return true;
+  }
+  const lower = cleaned.toLowerCase();
+  if (WEAK_LABELS.has(lower)) {
+    return true;
+  }
+  if (lower.startsWith("icon ") || lower.endsWith(" icon")) {
+    return true;
+  }
+  return false;
+}
+
 function selectorToLabel(selector) {
   const text = sanitizeLabel(selector);
   if (!text) {
     return "";
   }
-  if (text.includes(">")) {
-    return "";
+
+  const attributeMatch = text.match(/(?:aria-label|data-testid|data-test|data-qa)=["']([^"']+)["']/i);
+  if (attributeMatch?.[1]) {
+    const candidate = cleanCandidate(attributeMatch[1]);
+    if (!isWeakLabel(candidate)) {
+      return candidate;
+    }
   }
 
-  const normalized = text.replace(/:nth-of-type\(\d+\)/g, "").trim();
-  if (!normalized || /^[a-z]+$/i.test(normalized)) {
-    return "";
+  const segment = text.split(">").pop()?.trim() || text;
+  const idMatch = segment.match(/#([a-zA-Z0-9_-]+)/);
+  if (idMatch?.[1]) {
+    const candidate = cleanCandidate(idMatch[1]);
+    if (!isWeakLabel(candidate)) {
+      return candidate;
+    }
   }
 
-  const lastToken = normalized.split(/\s+/).pop() || "";
-  if (!lastToken || /^[a-z]+$/i.test(lastToken)) {
-    return "";
+  const classMatch = segment.match(/\.([a-zA-Z][a-zA-Z0-9_-]{2,})/);
+  if (classMatch?.[1]) {
+    const candidate = cleanCandidate(classMatch[1]);
+    if (!isWeakLabel(candidate)) {
+      return candidate;
+    }
   }
-  return lastToken;
+
+  const segmentLabel = cleanCandidate(segment);
+  if (!isWeakLabel(segmentLabel)) {
+    return segmentLabel;
+  }
+
+  return "";
 }
 
 function semanticFallback(step) {
@@ -71,17 +164,29 @@ function semanticFallback(step) {
 }
 
 function targetLabel(step) {
-  const selectorHint = selectorToLabel(step.selectors?.css);
-  return (
-    sanitizeLabel(step.target?.label) ||
-    sanitizeLabel(step.target?.text) ||
-    sanitizeLabel(step.target?.id ? `#${step.target.id}` : "") ||
-    sanitizeLabel(step.target?.name ? `[${step.target.name}]` : "") ||
-    sanitizeLabel(selectorHint) ||
-    semanticFallback(step) ||
-    sanitizeLabel(step.target?.tag) ||
-    "target"
-  );
+  const candidates = [
+    step.target?.label,
+    step.target?.text,
+    step.target?.placeholder,
+    step.target?.id,
+    step.target?.name,
+    selectorToLabel(step.selectors?.css),
+    selectorToLabel(step.selectors?.xpath)
+  ];
+
+  for (const raw of candidates) {
+    const candidate = cleanCandidate(raw);
+    if (!isWeakLabel(candidate)) {
+      return candidate;
+    }
+  }
+
+  const semantic = cleanCandidate(semanticFallback(step));
+  if (semantic) {
+    return semantic;
+  }
+
+  return "target";
 }
 
 function deriveTitle(step) {
@@ -136,6 +241,33 @@ function deriveInstruction(step) {
   return `Perform ${step.type || "action"} on ${label}.`;
 }
 
+function normalizeAnnotations(raw) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((annotation, idx) => {
+      if (!annotation || typeof annotation !== "object") {
+        return null;
+      }
+      const width = clampUnit(annotation.width);
+      const height = clampUnit(annotation.height);
+      if (width < 0.01 || height < 0.01) {
+        return null;
+      }
+      return {
+        id: annotation.id || `ann_${idx + 1}`,
+        x: clampUnit(annotation.x),
+        y: clampUnit(annotation.y),
+        width,
+        height,
+        label: normalizeText(annotation.label || "")
+      };
+    })
+    .filter(Boolean);
+}
+
 function normalizePayload(raw) {
   if (!raw || typeof raw !== "object" || !raw.session || !Array.isArray(raw.steps)) {
     throw new Error("Expected payload shape: { session: {...}, steps: [...] }");
@@ -149,7 +281,8 @@ function normalizePayload(raw) {
       stepIndex: idx + 1,
       title: normalizeText(step.title) || deriveTitle(step),
       instruction: normalizeText(step.instruction) || deriveInstruction(step),
-      note: normalizeText(step.note)
+      note: normalizeText(step.note),
+      annotations: normalizeAnnotations(step.annotations)
     };
   });
 
@@ -171,24 +304,65 @@ function asMarkdown(payload) {
     if (step.url) {
       lines.push(`URL: ${step.url}`);
     }
+    if (Array.isArray(step.annotations) && step.annotations.length) {
+      const highlights = step.annotations
+        .map((ann, idx) => ann.label || `Highlight ${idx + 1}`)
+        .join(", ");
+      lines.push(`Highlights: ${highlights}`);
+    }
     lines.push("");
     return lines;
   });
   return [...header, ...body].join("\n");
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function asHtml(payload) {
   const sessionTitle = payload.session?.lastTitle || payload.session?.startTitle || payload.session?.id || "Procedure";
   const lines = payload.steps
     .map((step) => {
-      const note = step.note ? `<p class="note"><strong>Note:</strong> ${step.note}</p>` : "";
-      const url = step.url ? `<p class="url"><strong>URL:</strong> ${step.url}</p>` : "";
+      const note = step.note ? `<p class="note"><strong>Note:</strong> ${escapeHtml(step.note)}</p>` : "";
+      const url = step.url ? `<p class="url"><strong>URL:</strong> ${escapeHtml(step.url)}</p>` : "";
+      const screenshot =
+        step.thumbnailDataUrl && typeof step.thumbnailDataUrl === "string"
+          ? `<figure class="shot">
+              <div class="shot-frame">
+                <img src="${escapeHtml(step.thumbnailDataUrl)}" alt="Step ${step.stepIndex} screenshot" />
+                ${(Array.isArray(step.annotations) ? step.annotations : [])
+                  .map((ann, idx) => {
+                    const x = Math.min(1, Math.max(0, Number(ann?.x) || 0));
+                    const y = Math.min(1, Math.max(0, Number(ann?.y) || 0));
+                    const width = Math.min(1, Math.max(0.01, Number(ann?.width) || 0.01));
+                    const height = Math.min(1, Math.max(0.01, Number(ann?.height) || 0.01));
+                    const label = escapeHtml(ann?.label || `Highlight ${idx + 1}`);
+                    return `<div class="shot-highlight" style="left:${(x * 100).toFixed(3)}%;top:${(y * 100).toFixed(3)}%;width:${(width * 100).toFixed(3)}%;height:${(height * 100).toFixed(3)}%;">
+                        <span class="shot-highlight-label">${label}</span>
+                      </div>`;
+                  })
+                  .join("")}
+              </div>
+            </figure>`
+          : "";
+      const highlights =
+        Array.isArray(step.annotations) && step.annotations.length
+          ? `<p class="note"><strong>Highlights:</strong> ${escapeHtml(step.annotations.map((ann, idx) => ann.label || `Highlight ${idx + 1}`).join(", "))}</p>`
+          : "";
       return `
         <section class="step">
-          <h2>${step.stepIndex}. ${step.title}</h2>
-          <p>${step.instruction || ""}</p>
+          <h2>${step.stepIndex}. ${escapeHtml(step.title)}</h2>
+          <p>${escapeHtml(step.instruction || "")}</p>
+          ${screenshot}
           ${note}
           ${url}
+          ${highlights}
         </section>`;
     })
     .join("\n");
@@ -207,10 +381,15 @@ function asHtml(payload) {
       .step h2 { margin: 0 0 6px; font-size: 18px; }
       .step p { margin: 0 0 8px; line-height: 1.45; }
       .note, .url { color: #334155; font-size: 14px; }
+      .shot { margin: 10px 0 12px; }
+      .shot-frame { position: relative; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #fff; }
+      .shot-frame img { display: block; width: 100%; height: auto; }
+      .shot-highlight { position: absolute; border: 2px solid #2563eb; background: rgba(37, 99, 235, 0.16); box-sizing: border-box; }
+      .shot-highlight-label { position: absolute; left: 0; top: 0; transform: translateY(-100%); background: #2563eb; color: #fff; font-size: 11px; line-height: 1; padding: 4px 6px; border-radius: 6px 6px 6px 0; white-space: nowrap; }
     </style>
   </head>
   <body>
-    <h1>${sessionTitle}</h1>
+    <h1>${escapeHtml(sessionTitle)}</h1>
     <p class="meta">Generated ${new Date().toLocaleString()}</p>
     ${lines}
   </body>
@@ -308,6 +487,11 @@ export default function App() {
   const [extensionSteps, setExtensionSteps] = useState([]);
   const [selectedExtensionSessionId, setSelectedExtensionSessionId] = useState("");
   const [extensionStatus, setExtensionStatus] = useState("");
+  const [dragState, setDragState] = useState({ dragId: "", overId: "", placement: "after" });
+  const [annotationMode, setAnnotationMode] = useState(false);
+  const [draftAnnotation, setDraftAnnotation] = useState(null);
+  const [activeAnnotationId, setActiveAnnotationId] = useState("");
+  const screenshotRef = useRef(null);
   const palette = getPalette(theme);
   const hasExtensionStorage =
     typeof chrome !== "undefined" && Boolean(chrome.storage?.local) && Boolean(chrome.runtime?.id);
@@ -325,6 +509,15 @@ export default function App() {
     () => payload?.steps?.find((step) => step.id === selectedId) || payload?.steps?.[0] || null,
     [payload, selectedId]
   );
+  const activeAnnotation = useMemo(
+    () => selectedStep?.annotations?.find((annotation) => annotation.id === activeAnnotationId) || null,
+    [selectedStep, activeAnnotationId]
+  );
+
+  useEffect(() => {
+    setDraftAnnotation(null);
+    setActiveAnnotationId("");
+  }, [selectedId]);
 
   function onFileSelected(event) {
     const file = event.target.files?.[0];
@@ -349,16 +542,20 @@ export default function App() {
     reader.readAsText(file);
   }
 
-  function updateStep(stepId, patch) {
+  function patchStep(stepId, patchFn) {
     setPayload((prev) => {
       if (!prev) {
         return prev;
       }
       return {
         ...prev,
-        steps: prev.steps.map((step) => (step.id === stepId ? { ...step, ...patch } : step))
+        steps: prev.steps.map((step) => (step.id === stepId ? patchFn(step) : step))
       };
     });
+  }
+
+  function updateStep(stepId, patch) {
+    patchStep(stepId, (step) => ({ ...step, ...patch }));
   }
 
   function moveStep(stepId, direction) {
@@ -381,6 +578,33 @@ export default function App() {
     });
   }
 
+  function moveStepTo(stepId, targetId, placement) {
+    setPayload((prev) => {
+      if (!prev || stepId === targetId) {
+        return prev;
+      }
+
+      const fromIndex = prev.steps.findIndex((step) => step.id === stepId);
+      const targetIndex = prev.steps.findIndex((step) => step.id === targetId);
+      if (fromIndex < 0 || targetIndex < 0) {
+        return prev;
+      }
+
+      let insertIndex = targetIndex + (placement === "after" ? 1 : 0);
+      const next = [...prev.steps];
+      const [moved] = next.splice(fromIndex, 1);
+      if (!moved) {
+        return prev;
+      }
+      if (fromIndex < insertIndex) {
+        insertIndex -= 1;
+      }
+      insertIndex = Math.min(Math.max(insertIndex, 0), next.length);
+      next.splice(insertIndex, 0, moved);
+      return { ...prev, steps: resequence(next) };
+    });
+  }
+
   function deleteStep(stepId) {
     setPayload((prev) => {
       if (!prev) {
@@ -390,6 +614,117 @@ export default function App() {
       setSelectedId(next[0]?.id || null);
       return { ...prev, steps: resequence(next) };
     });
+  }
+
+  function upsertAnnotation(stepId, annotationId, patch) {
+    patchStep(stepId, (step) => ({
+      ...step,
+      annotations: (step.annotations ?? []).map((annotation) =>
+        annotation.id === annotationId ? { ...annotation, ...patch } : annotation
+      )
+    }));
+  }
+
+  function deleteAnnotation(stepId, annotationId) {
+    patchStep(stepId, (step) => ({
+      ...step,
+      annotations: (step.annotations ?? []).filter((annotation) => annotation.id !== annotationId)
+    }));
+    if (activeAnnotationId === annotationId) {
+      setActiveAnnotationId("");
+    }
+  }
+
+  function onStepDragStart(stepId, event) {
+    setDragState({ dragId: stepId, overId: stepId, placement: "after" });
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", stepId);
+  }
+
+  function onStepDragOver(stepId, event) {
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const placement = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    setDragState((prev) => {
+      if (prev.overId === stepId && prev.placement === placement) {
+        return prev;
+      }
+      return { ...prev, overId: stepId, placement };
+    });
+  }
+
+  function onStepDrop(stepId, event) {
+    event.preventDefault();
+    const dragId = dragState.dragId || event.dataTransfer.getData("text/plain");
+    if (dragId) {
+      moveStepTo(dragId, stepId, dragState.placement);
+      setSelectedId(dragId);
+    }
+    setDragState({ dragId: "", overId: "", placement: "after" });
+  }
+
+  function onStepDragEnd() {
+    setDragState({ dragId: "", overId: "", placement: "after" });
+  }
+
+  function toRelativePoint(event, rect) {
+    return {
+      x: clampUnit((event.clientX - rect.left) / rect.width),
+      y: clampUnit((event.clientY - rect.top) / rect.height)
+    };
+  }
+
+  function buildRelativeRect(start, end) {
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
+    const width = Math.abs(start.x - end.x);
+    const height = Math.abs(start.y - end.y);
+    return { x, y, width, height };
+  }
+
+  function onScreenshotMouseDown(event) {
+    if (!annotationMode || !selectedStep || !selectedStep.thumbnailDataUrl || event.button !== 0) {
+      return;
+    }
+    const surface = screenshotRef.current;
+    if (!surface) {
+      return;
+    }
+
+    event.preventDefault();
+    const rect = surface.getBoundingClientRect();
+    const start = toRelativePoint(event, rect);
+    setDraftAnnotation({ x: start.x, y: start.y, width: 0, height: 0 });
+    const stepId = selectedStep.id;
+
+    const onMove = (moveEvent) => {
+      const current = toRelativePoint(moveEvent, rect);
+      setDraftAnnotation(buildRelativeRect(start, current));
+    };
+
+    const onUp = (upEvent) => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      const end = toRelativePoint(upEvent, rect);
+      const nextRect = buildRelativeRect(start, end);
+      setDraftAnnotation(null);
+      if (nextRect.width < 0.02 || nextRect.height < 0.02) {
+        return;
+      }
+      const annotation = {
+        id: `ann_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        ...nextRect,
+        label: ""
+      };
+      patchStep(stepId, (step) => ({
+        ...step,
+        annotations: [...(step.annotations ?? []), annotation]
+      }));
+      setActiveAnnotationId(annotation.id);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }
 
   function exportJson() {
@@ -495,7 +830,7 @@ export default function App() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <h1 style={{ marginTop: 0, marginBottom: 4 }}>Cap Me Action Editor</h1>
-          <p style={{ margin: 0, color: palette.textSoft }}>Import a session, refine step wording/order, and export JSON or Markdown.</p>
+          <p style={{ margin: 0, color: palette.textSoft }}>Import a session, reorder steps by drag/drop, annotate screenshots, and export JSON or Markdown.</p>
         </div>
         <button type="button" style={buttonStyle(palette, false)} onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
           Theme: {theme}
@@ -557,21 +892,35 @@ export default function App() {
             {payload.steps.map((step, idx) => (
               <div
                 key={step.id}
+                draggable
+                onDragStart={(event) => onStepDragStart(step.id, event)}
+                onDragOver={(event) => onStepDragOver(step.id, event)}
+                onDrop={(event) => onStepDrop(step.id, event)}
+                onDragEnd={onStepDragEnd}
                 style={{
                   border: `1px solid ${palette.border}`,
                   borderRadius: 8,
                   padding: 8,
                   marginBottom: 8,
-                  background: step.id === selectedStep?.id ? palette.surfaceAlt : palette.surface
+                  background: step.id === selectedStep?.id ? palette.surfaceAlt : palette.surface,
+                  boxShadow:
+                    dragState.overId === step.id
+                      ? `inset 0 ${dragState.placement === "before" ? "2" : "-2"}px 0 ${palette.accent}`
+                      : "none"
                 }}
               >
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(step.id)}
-                  style={{ width: "100%", textAlign: "left", border: 0, background: "transparent", padding: 0, cursor: "pointer", color: palette.text, fontWeight: 600 }}
-                >
-                  #{step.stepIndex} {step.title}
-                </button>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ color: palette.textSoft, cursor: "grab", userSelect: "none", fontSize: 13 }} title="Drag to reorder">
+                    Drag
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(step.id)}
+                    style={{ width: "100%", textAlign: "left", border: 0, background: "transparent", padding: 0, cursor: "pointer", color: palette.text, fontWeight: 600 }}
+                  >
+                    #{step.stepIndex} {step.title}
+                  </button>
+                </div>
                 <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
                   <button type="button" onClick={() => moveStep(step.id, -1)} disabled={idx === 0} style={buttonStyle(palette, idx === 0)}>
                     Up
@@ -624,6 +973,105 @@ export default function App() {
                   onChange={(event) => updateStep(selectedStep.id, { note: event.target.value })}
                   style={{ width: "100%", marginTop: 4, marginBottom: 10, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
                 />
+
+                {selectedStep.thumbnailDataUrl ? (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <h3 style={{ margin: 0 }}>Screenshot Annotation</h3>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => setAnnotationMode((prev) => !prev)}
+                          style={{
+                            ...buttonStyle(palette, false),
+                            background: annotationMode ? palette.accent : palette.surface,
+                            color: annotationMode ? "#ffffff" : palette.text
+                          }}
+                        >
+                          {annotationMode ? "Drawing On" : "Draw Highlight"}
+                        </button>
+                        <button type="button" onClick={() => deleteAnnotation(selectedStep.id, activeAnnotationId)} style={buttonStyle(palette, !activeAnnotationId)} disabled={!activeAnnotationId}>
+                          Delete Highlight
+                        </button>
+                      </div>
+                    </div>
+
+                    <div
+                      ref={screenshotRef}
+                      onMouseDown={onScreenshotMouseDown}
+                      style={{
+                        position: "relative",
+                        border: `1px solid ${palette.border}`,
+                        borderRadius: 8,
+                        overflow: "hidden",
+                        marginBottom: 10,
+                        cursor: annotationMode ? "crosshair" : "default",
+                        userSelect: "none"
+                      }}
+                    >
+                      <img src={selectedStep.thumbnailDataUrl} alt="Step screenshot" style={{ width: "100%", display: "block" }} />
+                      {(selectedStep.annotations ?? []).map((annotation) => (
+                        <button
+                          key={annotation.id}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setActiveAnnotationId(annotation.id);
+                          }}
+                          style={{
+                            position: "absolute",
+                            left: `${annotation.x * 100}%`,
+                            top: `${annotation.y * 100}%`,
+                            width: `${annotation.width * 100}%`,
+                            height: `${annotation.height * 100}%`,
+                            border: `2px solid ${annotation.id === activeAnnotationId ? "#fbbf24" : palette.accent}`,
+                            background: "rgba(59, 130, 246, 0.15)",
+                            borderRadius: 4
+                          }}
+                          title={annotation.label || "Highlight"}
+                        />
+                      ))}
+                      {draftAnnotation ? (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: `${draftAnnotation.x * 100}%`,
+                            top: `${draftAnnotation.y * 100}%`,
+                            width: `${draftAnnotation.width * 100}%`,
+                            height: `${draftAnnotation.height * 100}%`,
+                            border: `2px dashed ${palette.accent}`,
+                            background: "rgba(59, 130, 246, 0.12)",
+                            borderRadius: 4,
+                            pointerEvents: "none"
+                          }}
+                        />
+                      ) : null}
+                    </div>
+
+                    {activeAnnotation ? (
+                      <>
+                        <label htmlFor="highlight-label" style={{ display: "block", fontWeight: 600 }}>
+                          Highlight Label
+                        </label>
+                        <input
+                          id="highlight-label"
+                          value={activeAnnotation.label}
+                          onChange={(event) => upsertAnnotation(selectedStep.id, activeAnnotation.id, { label: event.target.value })}
+                          placeholder="e.g. Team Members tab"
+                          style={{ width: "100%", marginTop: 4, marginBottom: 10, padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
+                        />
+                      </>
+                    ) : (
+                      <p style={{ marginTop: 4, marginBottom: 10, color: palette.textSoft, fontSize: 14 }}>
+                        {annotationMode ? "Drag on the screenshot to draw a highlight." : "Enable drawing to add a new highlight box."}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p style={{ marginTop: 0, color: palette.textSoft, fontSize: 14 }}>
+                    This step has no screenshot thumbnail yet. Capture with thumbnails enabled to annotate visually.
+                  </p>
+                )}
 
                 <h3 style={{ marginBottom: 6 }}>Step Metadata</h3>
                 <pre
