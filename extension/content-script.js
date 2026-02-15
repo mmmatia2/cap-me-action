@@ -385,9 +385,64 @@ window.addEventListener("scroll", onCaptureScroll, { capture: true, passive: tru
 
 const dockState = { isCapturing: false, startedAt: null, stepCount: 0 };
 let floatingDockFrame = null;
+let dockUi = { left: null, bottom: 18, minimized: false };
+let dockUiLoaded = false;
+
+const DOCK_EXPANDED = { width: 400, height: 72 };
+const DOCK_MINIMIZED = { width: 220, height: 64 };
 
 function sendRuntimeMessage(message) {
   return new Promise((resolve) => chrome.runtime.sendMessage(message, resolve));
+}
+
+function getCurrentDockSize() {
+  return dockUi.minimized ? DOCK_MINIMIZED : DOCK_EXPANDED;
+}
+
+function clampDockPosition() {
+  const size = getCurrentDockSize();
+  const maxLeft = Math.max(0, window.innerWidth - size.width - 4);
+  dockUi.left = Math.min(Math.max(dockUi.left ?? 0, 4), maxLeft);
+  dockUi.bottom = Math.min(Math.max(dockUi.bottom ?? 18, 4), Math.max(4, window.innerHeight - size.height - 4));
+}
+
+function applyDockFrameStyle() {
+  if (!floatingDockFrame) {
+    return;
+  }
+  const size = getCurrentDockSize();
+  clampDockPosition();
+  floatingDockFrame.style.position = "fixed";
+  floatingDockFrame.style.left = `${dockUi.left}px`;
+  floatingDockFrame.style.bottom = `${dockUi.bottom}px`;
+  floatingDockFrame.style.transform = "none";
+  floatingDockFrame.style.width = `${size.width}px`;
+  floatingDockFrame.style.height = `${size.height}px`;
+  floatingDockFrame.style.border = "0";
+  floatingDockFrame.style.borderRadius = dockUi.minimized ? "18px" : "30px";
+  floatingDockFrame.style.zIndex = "2147483647";
+  floatingDockFrame.style.background = "transparent";
+  floatingDockFrame.style.boxShadow = "0 12px 35px rgba(0,0,0,0.35)";
+}
+
+function persistDockUi() {
+  chrome.storage.local.set({ dockUi });
+}
+
+async function ensureDockUiLoaded() {
+  if (dockUiLoaded || !hasLiveExtensionContext()) {
+    return;
+  }
+  const store = await new Promise((resolve) => chrome.storage.local.get(["dockUi"], resolve));
+  const stored = store.dockUi ?? null;
+  if (stored && typeof stored === "object") {
+    dockUi = {
+      left: Number.isFinite(stored.left) ? stored.left : null,
+      bottom: Number.isFinite(stored.bottom) ? stored.bottom : 18,
+      minimized: Boolean(stored.minimized)
+    };
+  }
+  dockUiLoaded = true;
 }
 
 function ensureFloatingDock() {
@@ -395,25 +450,24 @@ function ensureFloatingDock() {
     return;
   }
 
+  const size = getCurrentDockSize();
+  if (!Number.isFinite(dockUi.left)) {
+    dockUi.left = Math.round((window.innerWidth - size.width) / 2);
+  }
+  clampDockPosition();
+
   const frame = document.createElement("iframe");
   frame.src = chrome.runtime.getURL("ui-floating-control/index.html");
-  frame.style.position = "fixed";
-  frame.style.left = "50%";
-  frame.style.bottom = "18px";
-  frame.style.transform = "translateX(-50%)";
-  frame.style.width = "340px";
-  frame.style.height = "96px";
-  frame.style.border = "0";
-  frame.style.borderRadius = "30px";
-  frame.style.zIndex = "2147483647";
-  frame.style.background = "transparent";
-  frame.style.boxShadow = "0 12px 35px rgba(0,0,0,0.35)";
+  floatingDockFrame = frame;
+  applyDockFrameStyle();
   frame.addEventListener("load", () => {
     if (frame.contentWindow) {
-      frame.contentWindow.postMessage({ channel: "CAP_ME_DOCK", type: "STATE", payload: dockState }, "*");
+      frame.contentWindow.postMessage(
+        { channel: "CAP_ME_DOCK", type: "STATE", payload: { ...dockState, minimized: dockUi.minimized } },
+        "*"
+      );
     }
   });
-  floatingDockFrame = frame;
   document.documentElement.appendChild(frame);
 }
 
@@ -429,7 +483,10 @@ function postDockState() {
   if (!floatingDockFrame?.contentWindow) {
     return;
   }
-  floatingDockFrame.contentWindow.postMessage({ channel: "CAP_ME_DOCK", type: "STATE", payload: dockState }, "*");
+  floatingDockFrame.contentWindow.postMessage(
+    { channel: "CAP_ME_DOCK", type: "STATE", payload: { ...dockState, minimized: dockUi.minimized } },
+    "*"
+  );
 }
 
 async function refreshDockState() {
@@ -437,6 +494,7 @@ async function refreshDockState() {
     removeFloatingDock();
     return;
   }
+  await ensureDockUiLoaded();
 
   const response = await sendRuntimeMessage({ type: "GET_DOCK_STATE" });
   if (!response?.ok) {
@@ -450,6 +508,7 @@ async function refreshDockState() {
 
   if (dockState.isCapturing) {
     ensureFloatingDock();
+    applyDockFrameStyle();
     postDockState();
     return;
   }
@@ -487,6 +546,26 @@ window.addEventListener("message", (event) => {
       }
       setTimeout(refreshDockState, 80);
     });
+    return;
+  }
+
+  if (data.type === "TOGGLE_MINIMIZE") {
+    dockUi.minimized = !dockUi.minimized;
+    applyDockFrameStyle();
+    postDockState();
+    persistDockUi();
+    return;
+  }
+
+  if (data.type === "MOVE_DOCK") {
+    const dx = Number(data.payload?.dx) || 0;
+    const dy = Number(data.payload?.dy) || 0;
+    if (dx !== 0 || dy !== 0) {
+      dockUi.left = (dockUi.left ?? 0) + dx;
+      dockUi.bottom -= dy;
+      applyDockFrameStyle();
+      persistDockUi();
+    }
   }
 });
 
@@ -497,6 +576,14 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (changes.captureState || changes.steps) {
     refreshDockState();
   }
+});
+
+window.addEventListener("resize", () => {
+  if (!floatingDockFrame) {
+    return;
+  }
+  applyDockFrameStyle();
+  persistDockUi();
 });
 
 refreshDockState();

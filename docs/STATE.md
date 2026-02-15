@@ -1,6 +1,6 @@
 ﻿# STATE
 
-- Current micro-task number: 23
+- Current micro-task number: 24
 - What’s working end-to-end:
   - Monorepo root with pnpm workspace configuration.
   - React/Vite app can inspect latest persisted `sessions` and `steps` when `chrome.storage.local` is available.
@@ -14,14 +14,16 @@
   - Content script now injects a floating recorder dock from `ui-floating-control/index.html` while capture is active, with live timer/step count and pause/finish controls.
   - Action popup now uses local MV3-safe CSS/HTML (no remote Tailwind runtime), aligned to Stitch visuals while preserving existing capture/session wiring.
   - Floating dock now has local CSS compact styling, per-tab step count via `GET_DOCK_STATE`, and working `Discard Last Step` action with in-dock feedback.
+  - Floating dock now supports drag-to-reposition with persisted placement (`dockUi`) and minimize/restore behavior.
 - Message types/payload shapes:
   - `START_CAPTURE`: `{}`
   - `STOP_CAPTURE`: `{}`
   - `DISCARD_LAST_STEP`: `{ sessionId: string }`
+  - `GET_DOCK_STATE`: `{}`
   - `CONTENT_SCRIPT_READY`: `{ href: string, title?: string, ts: number }`
   - `STEP_CAPTURED`: `{ kind: "click" | "key" | "input" | "select" | "toggle" | "navigate" | "scroll", href: string, title?: string, ts: number, target?: object, selectors?: { css?: string, xpath?: string }, key?: string, modifiers?: object, value?: string, inputType?: string, optionValue?: string, optionText?: string, checked?: boolean, scrollX?: number, scrollY?: number, navigationKind?: string, fromHref?: string }`
 - Data model (Session/Step):
   - CaptureState: `{ isCapturing: boolean, startedAt: number | null }`
   - Session: `{ id: string, tabId: number, startUrl: string, startTitle?: string, lastUrl?: string, lastTitle?: string, startedAt: number, updatedAt: number, stepsCount: number }`
   - Step: `{ id: string, sessionId: string, stepIndex?: number, type: string, url: string, pageTitle?: string, at: number, key?: string | null, modifiers?: object | null, value?: string | null, inputType?: string | null, optionValue?: string | null, optionText?: string | null, checked?: boolean | null, scrollX?: number | null, scrollY?: number | null, navigationKind?: string | null, fromHref?: string | null, target?: object | null, selectors?: object | null, thumbnailDataUrl?: string | null }`
-- Next micro-task (1 line): add dock drag-to-reposition persistence and optional minimize behavior.
+- Next micro-task (1 line): stabilize step-title generation in app editor and add keyboard shortcuts for dock controls.
