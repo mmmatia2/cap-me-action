@@ -386,8 +386,8 @@ window.addEventListener("scroll", onCaptureScroll, { capture: true, passive: tru
 const dockState = { isCapturing: false, startedAt: null, stepCount: 0 };
 let floatingDockFrame = null;
 
-function getStorageSnapshot(keys) {
-  return new Promise((resolve) => chrome.storage.local.get(keys, resolve));
+function sendRuntimeMessage(message) {
+  return new Promise((resolve) => chrome.runtime.sendMessage(message, resolve));
 }
 
 function ensureFloatingDock() {
@@ -401,10 +401,10 @@ function ensureFloatingDock() {
   frame.style.left = "50%";
   frame.style.bottom = "18px";
   frame.style.transform = "translateX(-50%)";
-  frame.style.width = "560px";
-  frame.style.height = "120px";
+  frame.style.width = "340px";
+  frame.style.height = "96px";
   frame.style.border = "0";
-  frame.style.borderRadius = "16px";
+  frame.style.borderRadius = "30px";
   frame.style.zIndex = "2147483647";
   frame.style.background = "transparent";
   frame.style.boxShadow = "0 12px 35px rgba(0,0,0,0.35)";
@@ -438,10 +438,15 @@ async function refreshDockState() {
     return;
   }
 
-  const store = await getStorageSnapshot(["captureState", "steps"]);
-  dockState.isCapturing = Boolean(store.captureState?.isCapturing);
-  dockState.startedAt = store.captureState?.startedAt ?? null;
-  dockState.stepCount = (store.steps ?? []).length;
+  const response = await sendRuntimeMessage({ type: "GET_DOCK_STATE" });
+  if (!response?.ok) {
+    removeFloatingDock();
+    return;
+  }
+
+  dockState.isCapturing = Boolean(response.isCapturing);
+  dockState.startedAt = response.startedAt ?? null;
+  dockState.stepCount = response.stepsCount ?? 0;
 
   if (dockState.isCapturing) {
     ensureFloatingDock();
@@ -469,6 +474,19 @@ window.addEventListener("message", (event) => {
   if (data.type === "STOP_CAPTURE") {
     safeSendMessage({ type: "STOP_CAPTURE" });
     setTimeout(refreshDockState, 80);
+    return;
+  }
+
+  if (data.type === "DISCARD_LAST_STEP") {
+    sendRuntimeMessage({ type: "DISCARD_LAST_STEP" }).then((response) => {
+      if (floatingDockFrame?.contentWindow) {
+        floatingDockFrame.contentWindow.postMessage(
+          { channel: "CAP_ME_DOCK", type: "DISCARD_RESULT", discarded: Boolean(response?.discarded) },
+          "*"
+        );
+      }
+      setTimeout(refreshDockState, 80);
+    });
   }
 });
 

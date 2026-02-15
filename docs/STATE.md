@@ -1,6 +1,6 @@
 ﻿# STATE
 
-- Current micro-task number: 22
+- Current micro-task number: 23
 - What’s working end-to-end:
   - Monorepo root with pnpm workspace configuration.
   - React/Vite app can inspect latest persisted `sessions` and `steps` when `chrome.storage.local` is available.
@@ -13,6 +13,7 @@
   - Action popup now points to `ui-record-popup/index.html` with working start/stop capture and recent-session summaries, plus links to open the advanced inspector view.
   - Content script now injects a floating recorder dock from `ui-floating-control/index.html` while capture is active, with live timer/step count and pause/finish controls.
   - Action popup now uses local MV3-safe CSS/HTML (no remote Tailwind runtime), aligned to Stitch visuals while preserving existing capture/session wiring.
+  - Floating dock now has local CSS compact styling, per-tab step count via `GET_DOCK_STATE`, and working `Discard Last Step` action with in-dock feedback.
 - Message types/payload shapes:
   - `START_CAPTURE`: `{}`
   - `STOP_CAPTURE`: `{}`
@@ -23,4 +24,4 @@
   - CaptureState: `{ isCapturing: boolean, startedAt: number | null }`
   - Session: `{ id: string, tabId: number, startUrl: string, startTitle?: string, lastUrl?: string, lastTitle?: string, startedAt: number, updatedAt: number, stepsCount: number }`
   - Step: `{ id: string, sessionId: string, stepIndex?: number, type: string, url: string, pageTitle?: string, at: number, key?: string | null, modifiers?: object | null, value?: string | null, inputType?: string | null, optionValue?: string | null, optionText?: string | null, checked?: boolean | null, scrollX?: number | null, scrollY?: number | null, navigationKind?: string | null, fromHref?: string | null, target?: object | null, selectors?: object | null, thumbnailDataUrl?: string | null }`
-- Next micro-task (1 line): refine floating dock visual parity and connect dock discard action to per-session step removal.
+- Next micro-task (1 line): add dock drag-to-reposition persistence and optional minimize behavior.

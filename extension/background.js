@@ -163,8 +163,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
 
+      if (message.type === "GET_DOCK_STATE") {
+        const sessionId =
+          typeof tabId === "number" ? (sessionByTab[String(tabId)] ?? null) : null;
+        const session = sessionId ? sessions.find((x) => x.id === sessionId) ?? null : null;
+        const stepsCount = sessionId ? steps.filter((x) => x.sessionId === sessionId).length : 0;
+        sendResponse({
+          ok: true,
+          isCapturing: Boolean(captureState.isCapturing),
+          startedAt: captureState.startedAt ?? null,
+          sessionId,
+          stepsCount,
+          sessionUpdatedAt: session?.updatedAt ?? null
+        });
+        return;
+      }
+
       if (message.type === "DISCARD_LAST_STEP") {
-        const sessionId = message.payload?.sessionId ?? null;
+        const sessionId =
+          message.payload?.sessionId ??
+          (typeof tabId === "number" ? (sessionByTab[String(tabId)] ?? null) : null);
         if (!sessionId) {
           sendResponse({ ok: false, error: "Missing sessionId" });
           return;

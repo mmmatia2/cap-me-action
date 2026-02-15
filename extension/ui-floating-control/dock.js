@@ -1,13 +1,16 @@
 // Purpose: render recorder state inside the floating dock and emit control actions.
 // Inputs: state messages from parent frame and local button clicks.
-// Outputs: timer/step UI updates and postMessage commands for toggle/stop capture.
-const timerEl = document.querySelector("span.font-mono");
-const stepEl = document.querySelector("span.text-sm.text-white.font-bold.tabular-nums");
-const pauseBtn = document.querySelector('button[aria-label="Pause"]');
-const pauseIcon = pauseBtn?.querySelector(".material-symbols-outlined");
-const finishBtn = document.querySelector('button[aria-label="Finish Recording"]');
+// Outputs: timer/step UI updates and postMessage commands for toggle/stop/discard.
+const timerEl = document.getElementById("dockTimer");
+const stepEl = document.getElementById("dockStepCount");
+const pauseBtn = document.getElementById("dockPause");
+const pauseIcon = document.getElementById("dockPauseIcon");
+const finishBtn = document.getElementById("dockFinish");
+const discardBtn = document.getElementById("dockDiscard");
+const toastEl = document.getElementById("dockToast");
 
 const state = { isCapturing: false, startedAt: null, stepCount: 0 };
+let toastTimer = null;
 
 function formatDuration(ms) {
   const secs = Math.max(0, Math.floor(ms / 1000));
@@ -19,7 +22,19 @@ function formatDuration(ms) {
 function render() {
   stepEl.textContent = String(state.stepCount ?? 0);
   timerEl.textContent = state.isCapturing && state.startedAt ? formatDuration(Date.now() - state.startedAt) : "00:00";
-  pauseIcon.textContent = state.isCapturing ? "pause" : "play_arrow";
+  pauseIcon.textContent = state.isCapturing ? "?" : "?";
+}
+
+function showToast(text) {
+  if (!toastEl) {
+    return;
+  }
+  toastEl.textContent = text;
+  toastEl.classList.add("show");
+  if (toastTimer) {
+    clearTimeout(toastTimer);
+  }
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1300);
 }
 
 function send(type) {
@@ -28,14 +43,21 @@ function send(type) {
 
 window.addEventListener("message", (event) => {
   const data = event.data;
-  if (!data || data.channel !== "CAP_ME_DOCK" || data.type !== "STATE") {
+  if (!data || data.channel !== "CAP_ME_DOCK") {
     return;
   }
-  Object.assign(state, data.payload ?? {});
-  render();
+  if (data.type === "STATE") {
+    Object.assign(state, data.payload ?? {});
+    render();
+    return;
+  }
+  if (data.type === "DISCARD_RESULT") {
+    showToast(data.discarded ? "Step discarded" : "No step to discard");
+  }
 });
 
 pauseBtn.addEventListener("click", () => send("TOGGLE_CAPTURE"));
 finishBtn.addEventListener("click", () => send("STOP_CAPTURE"));
+discardBtn.addEventListener("click", () => send("DISCARD_LAST_STEP"));
 setInterval(render, 1000);
 render();
