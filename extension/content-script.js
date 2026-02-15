@@ -382,3 +382,103 @@ document.addEventListener("keydown", onCaptureKeydown, true);
 document.addEventListener("input", onCaptureInput, true);
 document.addEventListener("change", onCaptureChange, true);
 window.addEventListener("scroll", onCaptureScroll, { capture: true, passive: true });
+
+const dockState = { isCapturing: false, startedAt: null, stepCount: 0 };
+let floatingDockFrame = null;
+
+function getStorageSnapshot(keys) {
+  return new Promise((resolve) => chrome.storage.local.get(keys, resolve));
+}
+
+function ensureFloatingDock() {
+  if (floatingDockFrame || !document.documentElement || !hasLiveExtensionContext()) {
+    return;
+  }
+
+  const frame = document.createElement("iframe");
+  frame.src = chrome.runtime.getURL("ui-floating-control/index.html");
+  frame.style.position = "fixed";
+  frame.style.left = "50%";
+  frame.style.bottom = "18px";
+  frame.style.transform = "translateX(-50%)";
+  frame.style.width = "560px";
+  frame.style.height = "120px";
+  frame.style.border = "0";
+  frame.style.borderRadius = "16px";
+  frame.style.zIndex = "2147483647";
+  frame.style.background = "transparent";
+  frame.style.boxShadow = "0 12px 35px rgba(0,0,0,0.35)";
+  frame.addEventListener("load", () => {
+    if (frame.contentWindow) {
+      frame.contentWindow.postMessage({ channel: "CAP_ME_DOCK", type: "STATE", payload: dockState }, "*");
+    }
+  });
+  floatingDockFrame = frame;
+  document.documentElement.appendChild(frame);
+}
+
+function removeFloatingDock() {
+  if (!floatingDockFrame) {
+    return;
+  }
+  floatingDockFrame.remove();
+  floatingDockFrame = null;
+}
+
+function postDockState() {
+  if (!floatingDockFrame?.contentWindow) {
+    return;
+  }
+  floatingDockFrame.contentWindow.postMessage({ channel: "CAP_ME_DOCK", type: "STATE", payload: dockState }, "*");
+}
+
+async function refreshDockState() {
+  if (!hasLiveExtensionContext()) {
+    removeFloatingDock();
+    return;
+  }
+
+  const store = await getStorageSnapshot(["captureState", "steps"]);
+  dockState.isCapturing = Boolean(store.captureState?.isCapturing);
+  dockState.startedAt = store.captureState?.startedAt ?? null;
+  dockState.stepCount = (store.steps ?? []).length;
+
+  if (dockState.isCapturing) {
+    ensureFloatingDock();
+    postDockState();
+    return;
+  }
+  removeFloatingDock();
+}
+
+window.addEventListener("message", (event) => {
+  if (!floatingDockFrame || event.source !== floatingDockFrame.contentWindow) {
+    return;
+  }
+  const data = event.data;
+  if (!data || data.channel !== "CAP_ME_DOCK") {
+    return;
+  }
+
+  if (data.type === "TOGGLE_CAPTURE") {
+    safeSendMessage({ type: dockState.isCapturing ? "STOP_CAPTURE" : "START_CAPTURE" });
+    setTimeout(refreshDockState, 80);
+    return;
+  }
+
+  if (data.type === "STOP_CAPTURE") {
+    safeSendMessage({ type: "STOP_CAPTURE" });
+    setTimeout(refreshDockState, 80);
+  }
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") {
+    return;
+  }
+  if (changes.captureState || changes.steps) {
+    refreshDockState();
+  }
+});
+
+refreshDockState();

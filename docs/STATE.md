@@ -1,6 +1,6 @@
 ﻿# STATE
 
-- Current micro-task number: 20
+- Current micro-task number: 22
 - What’s working end-to-end:
   - Monorepo root with pnpm workspace configuration.
   - React/Vite app can inspect latest persisted `sessions` and `steps` when `chrome.storage.local` is available.
@@ -11,6 +11,8 @@
   - Extension popup (`inspector.html`) shows a capture status badge, supports start/stop controls, session selection, discard-last-step, exports/copies selected session data, and clear/reset actions.
   - React app now imports exported session JSON, supports per-step instruction/note editing, and exports edited JSON.
   - Action popup now points to `ui-record-popup/index.html` with working start/stop capture and recent-session summaries, plus links to open the advanced inspector view.
+  - Content script now injects a floating recorder dock from `ui-floating-control/index.html` while capture is active, with live timer/step count and pause/finish controls.
+  - Action popup now uses local MV3-safe CSS/HTML (no remote Tailwind runtime), aligned to Stitch visuals while preserving existing capture/session wiring.
 - Message types/payload shapes:
   - `START_CAPTURE`: `{}`
   - `STOP_CAPTURE`: `{}`
@@ -21,4 +23,4 @@
   - CaptureState: `{ isCapturing: boolean, startedAt: number | null }`
   - Session: `{ id: string, tabId: number, startUrl: string, startTitle?: string, lastUrl?: string, lastTitle?: string, startedAt: number, updatedAt: number, stepsCount: number }`
   - Step: `{ id: string, sessionId: string, stepIndex?: number, type: string, url: string, pageTitle?: string, at: number, key?: string | null, modifiers?: object | null, value?: string | null, inputType?: string | null, optionValue?: string | null, optionText?: string | null, checked?: boolean | null, scrollX?: number | null, scrollY?: number | null, navigationKind?: string | null, fromHref?: string | null, target?: object | null, selectors?: object | null, thumbnailDataUrl?: string | null }`
-- Next micro-task (1 line): integrate `extension/ui-floating-control/index.html` as an in-page recorder dock controlled by capture state.
+- Next micro-task (1 line): refine floating dock visual parity and connect dock discard action to per-session step removal.
