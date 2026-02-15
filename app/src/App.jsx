@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // Purpose: provide a practical step editor for exported recorder sessions.
 // Inputs: exported session JSON files and in-app edits to title/instruction/note/order.
@@ -31,8 +31,6 @@ function selectorToLabel(selector) {
   if (!text) {
     return "";
   }
-
-  // Drop long ancestry selectors; they are noisy and brittle.
   if (text.includes(">")) {
     return "";
   }
@@ -42,7 +40,6 @@ function selectorToLabel(selector) {
     return "";
   }
 
-  // Prefer the most specific chunk of a selector.
   const lastToken = normalized.split(/\s+/).pop() || "";
   if (!lastToken || /^[a-z]+$/i.test(lastToken)) {
     return "";
@@ -108,7 +105,7 @@ function deriveTitle(step) {
     return `Open ${step.pageTitle || step.url || "page"}`;
   }
   if (step.type === "scroll") {
-    return `Scroll page`;
+    return "Scroll page";
   }
   return `Perform ${step.type || "action"}`;
 }
@@ -180,13 +177,37 @@ function asMarkdown(payload) {
   return [...header, ...body].join("\n");
 }
 
-function buttonStyle(disabled = false) {
+function getPalette(theme) {
+  if (theme === "light") {
+    return {
+      bg: "#f7fafc",
+      surface: "#ffffff",
+      surfaceAlt: "#f8fafc",
+      border: "#dbe4f0",
+      text: "#0f172a",
+      textSoft: "#475569",
+      accent: "#2563eb"
+    };
+  }
+
   return {
-    border: "1px solid #d1d5db",
-    borderRadius: 6,
+    bg: "#0b1220",
+    surface: "#111b2e",
+    surfaceAlt: "#18253e",
+    border: "#243652",
+    text: "#e7edf7",
+    textSoft: "#9bb0cd",
+    accent: "#60a5fa"
+  };
+}
+
+function buttonStyle(palette, disabled = false) {
+  return {
+    border: `1px solid ${palette.border}`,
+    borderRadius: 8,
     padding: "7px 10px",
-    background: disabled ? "#f3f4f6" : "#fff",
-    color: disabled ? "#9ca3af" : "#111827",
+    background: disabled ? palette.surfaceAlt : palette.surface,
+    color: disabled ? palette.textSoft : palette.text,
     cursor: disabled ? "not-allowed" : "pointer"
   };
 }
@@ -195,6 +216,17 @@ export default function App() {
   const [payload, setPayload] = useState(null);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState(null);
+  const [theme, setTheme] = useState("dark");
+  const palette = getPalette(theme);
+
+  useEffect(() => {
+    // Purpose: keep page chrome visually consistent with the selected editor theme.
+    // Inputs: current theme palette. Outputs: document-level background/margin styles.
+    document.body.style.margin = "0";
+    document.body.style.background = palette.bg;
+    document.body.style.color = palette.text;
+    document.documentElement.style.background = palette.bg;
+  }, [palette.bg, palette.text]);
 
   const selectedStep = useMemo(
     () => payload?.steps?.find((step) => step.id === selectedId) || payload?.steps?.[0] || null,
@@ -294,44 +326,93 @@ export default function App() {
   }
 
   return (
-    <main style={{ fontFamily: "Segoe UI, sans-serif", padding: 16, color: "#111827" }}>
-      <h1 style={{ marginTop: 0 }}>Cap Me Action Editor</h1>
-      <p style={{ marginBottom: 16 }}>Import a session, refine step wording/order, and export JSON or Markdown.</p>
+    <main
+      style={{
+        fontFamily: "Segoe UI, sans-serif",
+        padding: 16,
+        color: palette.text,
+        background: palette.bg,
+        minHeight: "100vh",
+        width: "100%",
+        overflowX: "hidden",
+        boxSizing: "border-box"
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <h1 style={{ marginTop: 0, marginBottom: 4 }}>Cap Me Action Editor</h1>
+          <p style={{ margin: 0, color: palette.textSoft }}>Import a session, refine step wording/order, and export JSON or Markdown.</p>
+        </div>
+        <button type="button" style={buttonStyle(palette, false)} onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
+          Theme: {theme}
+        </button>
+      </div>
 
-      <input type="file" accept=".json,application/json" onChange={onFileSelected} />
-      <button type="button" onClick={exportJson} disabled={!payload} style={{ ...buttonStyle(!payload), marginLeft: 8 }}>
-        Export JSON
-      </button>
-      <button type="button" onClick={exportMarkdown} disabled={!payload} style={{ ...buttonStyle(!payload), marginLeft: 8 }}>
-        Export Markdown
-      </button>
-      {error ? <p style={{ color: "#b91c1c" }}>{error}</p> : null}
+      <div style={{ marginTop: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          type="file"
+          accept=".json,application/json"
+          onChange={onFileSelected}
+          style={{ maxWidth: "320px", color: palette.textSoft }}
+        />
+        <button type="button" onClick={exportJson} disabled={!payload} style={{ ...buttonStyle(palette, !payload), marginLeft: 8 }}>
+          Export JSON
+        </button>
+        <button type="button" onClick={exportMarkdown} disabled={!payload} style={{ ...buttonStyle(palette, !payload), marginLeft: 8 }}>
+          Export Markdown
+        </button>
+      </div>
+      {error ? <p style={{ color: "#ef4444" }}>{error}</p> : null}
 
       {!payload ? (
-        <p style={{ marginTop: 24 }}>No file loaded yet.</p>
+        <p style={{ marginTop: 24, color: palette.textSoft }}>No file loaded yet.</p>
       ) : (
-        <section style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 16, marginTop: 16 }}>
-          <aside style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, maxHeight: 620, overflow: "auto" }}>
+        <section style={{ display: "grid", gridTemplateColumns: "380px minmax(0, 1fr)", gap: 16, marginTop: 16 }}>
+          <aside style={{ border: `1px solid ${palette.border}`, background: palette.surface, borderRadius: 10, padding: 12, maxHeight: 620, overflow: "auto" }}>
             <h2 style={{ fontSize: 16, margin: "0 0 8px" }}>
               Session: {payload.session.id} ({payload.steps.length} steps)
             </h2>
             {payload.steps.map((step, idx) => (
-              <div key={step.id} style={{ border: "1px solid #d1d5db", borderRadius: 6, padding: 8, marginBottom: 8, background: step.id === selectedStep?.id ? "#eff6ff" : "#fff" }}>
-                <button type="button" onClick={() => setSelectedId(step.id)} style={{ width: "100%", textAlign: "left", border: 0, background: "transparent", padding: 0, cursor: "pointer", fontWeight: 600 }}>
+              <div
+                key={step.id}
+                style={{
+                  border: `1px solid ${palette.border}`,
+                  borderRadius: 8,
+                  padding: 8,
+                  marginBottom: 8,
+                  background: step.id === selectedStep?.id ? palette.surfaceAlt : palette.surface
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(step.id)}
+                  style={{ width: "100%", textAlign: "left", border: 0, background: "transparent", padding: 0, cursor: "pointer", color: palette.text, fontWeight: 600 }}
+                >
                   #{step.stepIndex} {step.title}
                 </button>
                 <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
-                  <button type="button" onClick={() => moveStep(step.id, -1)} disabled={idx === 0} style={buttonStyle(idx === 0)}>Up</button>
-                  <button type="button" onClick={() => moveStep(step.id, 1)} disabled={idx === payload.steps.length - 1} style={buttonStyle(idx === payload.steps.length - 1)}>Down</button>
-                  <button type="button" onClick={() => deleteStep(step.id)} style={{ ...buttonStyle(false), color: "#b91c1c" }}>Delete</button>
+                  <button type="button" onClick={() => moveStep(step.id, -1)} disabled={idx === 0} style={buttonStyle(palette, idx === 0)}>
+                    Up
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveStep(step.id, 1)}
+                    disabled={idx === payload.steps.length - 1}
+                    style={buttonStyle(palette, idx === payload.steps.length - 1)}
+                  >
+                    Down
+                  </button>
+                  <button type="button" onClick={() => deleteStep(step.id)} style={{ ...buttonStyle(palette, false), color: "#ef4444" }}>
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}
           </aside>
 
-          <article style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12 }}>
+          <article style={{ border: `1px solid ${palette.border}`, background: palette.surface, borderRadius: 10, padding: 12, minWidth: 0 }}>
             {!selectedStep ? (
-              <p>Select a step.</p>
+              <p style={{ color: palette.textSoft }}>Select a step.</p>
             ) : (
               <>
                 <h2 style={{ marginTop: 0 }}>Step #{selectedStep.stepIndex}</h2>
@@ -341,7 +422,7 @@ export default function App() {
                   id="title"
                   value={selectedStep.title}
                   onChange={(event) => updateStep(selectedStep.id, { title: event.target.value })}
-                  style={{ width: "100%", marginTop: 4, marginBottom: 10, padding: 8 }}
+                  style={{ width: "100%", marginTop: 4, marginBottom: 10, padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
                 />
 
                 <label htmlFor="instruction" style={{ display: "block", fontWeight: 600 }}>Instruction</label>
@@ -350,7 +431,7 @@ export default function App() {
                   rows={3}
                   value={selectedStep.instruction}
                   onChange={(event) => updateStep(selectedStep.id, { instruction: event.target.value })}
-                  style={{ width: "100%", marginTop: 4, marginBottom: 10 }}
+                  style={{ width: "100%", marginTop: 4, marginBottom: 10, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
                 />
 
                 <label htmlFor="note" style={{ display: "block", fontWeight: 600 }}>Note (optional)</label>
@@ -359,11 +440,24 @@ export default function App() {
                   rows={2}
                   value={selectedStep.note}
                   onChange={(event) => updateStep(selectedStep.id, { note: event.target.value })}
-                  style={{ width: "100%", marginTop: 4, marginBottom: 10 }}
+                  style={{ width: "100%", marginTop: 4, marginBottom: 10, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
                 />
 
                 <h3 style={{ marginBottom: 6 }}>Step Metadata</h3>
-                <pre style={{ margin: 0, background: "#f9fafb", padding: 10, borderRadius: 6, overflow: "auto", maxHeight: 260 }}>
+                <pre
+                  style={{
+                    margin: 0,
+                    background: palette.surfaceAlt,
+                    border: `1px solid ${palette.border}`,
+                    color: palette.textSoft,
+                    padding: 10,
+                    borderRadius: 6,
+                    overflow: "auto",
+                    maxHeight: 260,
+                    whiteSpace: "pre-wrap",
+                    overflowWrap: "anywhere"
+                  }}
+                >
                   {JSON.stringify(selectedStep, null, 2)}
                 </pre>
               </>

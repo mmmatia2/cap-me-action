@@ -469,6 +469,13 @@ function applyDockFrameStyle() {
   floatingDockFrame.style.boxShadow = "0 12px 35px rgba(0,0,0,0.35)";
 }
 
+function toggleDockMinimize() {
+  dockUi.minimized = !dockUi.minimized;
+  applyDockFrameStyle();
+  postDockState();
+  persistDockUi();
+}
+
 function persistDockUi() {
   if (!hasStorageApi()) {
     return;
@@ -615,10 +622,7 @@ window.addEventListener("message", (event) => {
   }
 
   if (data.type === "TOGGLE_MINIMIZE") {
-    dockUi.minimized = !dockUi.minimized;
-    applyDockFrameStyle();
-    postDockState();
-    persistDockUi();
+    toggleDockMinimize();
     return;
   }
 
@@ -652,5 +656,46 @@ window.addEventListener("resize", () => {
   applyDockFrameStyle();
   persistDockUi();
 });
+
+function isTypingContext(target) {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  const tag = target.tagName.toLowerCase();
+  return tag === "input" || tag === "textarea" || target.hasAttribute("contenteditable");
+}
+
+document.addEventListener(
+  "keydown",
+  async (event) => {
+    if (!hasLiveExtensionContext() || isTypingContext(event.target)) {
+      return;
+    }
+    if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+
+    const key = String(event.key || "").toLowerCase();
+    if (key === "r") {
+      event.preventDefault();
+      safeSendMessage({ type: dockState.isCapturing ? "STOP_CAPTURE" : "START_CAPTURE" });
+      setTimeout(refreshDockState, 80);
+      return;
+    }
+
+    if (key === "z") {
+      event.preventDefault();
+      await sendRuntimeMessage({ type: "DISCARD_LAST_STEP" });
+      setTimeout(refreshDockState, 80);
+      return;
+    }
+
+    if (key === "m") {
+      event.preventDefault();
+      toggleDockMinimize();
+    }
+  },
+  true
+);
 
 refreshDockState();
