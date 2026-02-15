@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { APP_SCHEMA_VERSION, buildSessionExport, migrateSessionPayload } from "./lib/migrations";
+import { deleteStepById, moveStepInList, patchStepById, resequenceSteps } from "./editor/state/sessionReducer";
 
 // Purpose: provide a practical step editor for exported recorder sessions.
 // Inputs: exported session JSON files, extension storage sessions, and in-app edits.
@@ -290,7 +292,7 @@ function normalizePayload(raw) {
 }
 
 function resequence(steps) {
-  return steps.map((step, idx) => ({ ...step, stepIndex: idx + 1 }));
+  return resequenceSteps(steps);
 }
 
 function asMarkdown(payload) {
@@ -487,6 +489,12 @@ export default function App() {
   const [extensionSteps, setExtensionSteps] = useState([]);
   const [selectedExtensionSessionId, setSelectedExtensionSessionId] = useState("");
   const [extensionStatus, setExtensionStatus] = useState("");
+  const [dataSource, setDataSource] = useState("local");
+  const [teamApiBase, setTeamApiBase] = useState("");
+  const [teamAccessToken, setTeamAccessToken] = useState("");
+  const [teamSessions, setTeamSessions] = useState([]);
+  const [selectedTeamSessionId, setSelectedTeamSessionId] = useState("");
+  const [teamStatus, setTeamStatus] = useState("");
   const [dragState, setDragState] = useState({ dragId: "", overId: "", placement: "after" });
   const [annotationMode, setAnnotationMode] = useState(false);
   const [draftAnnotation, setDraftAnnotation] = useState(null);
@@ -519,6 +527,41 @@ export default function App() {
     setActiveAnnotationId("");
   }, [selectedId]);
 
+  useEffect(() => {
+    const storedBase = window.localStorage.getItem("cap_me_team_api_base");
+    if (storedBase) {
+      setTeamApiBase(storedBase);
+    }
+    const storedToken = window.localStorage.getItem("cap_me_team_api_token");
+    if (storedToken) {
+      setTeamAccessToken(storedToken);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (teamApiBase) {
+      window.localStorage.setItem("cap_me_team_api_base", teamApiBase);
+    }
+  }, [teamApiBase]);
+
+  useEffect(() => {
+    if (teamAccessToken) {
+      window.localStorage.setItem("cap_me_team_api_token", teamAccessToken);
+    }
+  }, [teamAccessToken]);
+
+  useEffect(() => {
+    if (!hasExtensionStorage) {
+      return;
+    }
+    chrome.storage.local.get(["syncConfig"], (result) => {
+      const endpoint = result.syncConfig?.endpointUrl ?? "";
+      if (endpoint && !teamApiBase) {
+        setTeamApiBase(endpoint);
+      }
+    });
+  }, [hasExtensionStorage, teamApiBase]);
+
   function onFileSelected(event) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -529,7 +572,8 @@ export default function App() {
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result || "{}"));
-        const normalized = normalizePayload(parsed);
+        const migrated = migrateSessionPayload(parsed);
+        const normalized = normalizePayload(migrated);
         setPayload(normalized);
         setSelectedId(normalized.steps[0]?.id || null);
         setError("");
@@ -549,7 +593,7 @@ export default function App() {
       }
       return {
         ...prev,
-        steps: prev.steps.map((step) => (step.id === stepId ? patchFn(step) : step))
+        steps: patchStepById(prev.steps, stepId, patchFn)
       };
     });
   }
@@ -563,18 +607,7 @@ export default function App() {
       if (!prev) {
         return prev;
       }
-      const index = prev.steps.findIndex((step) => step.id === stepId);
-      if (index < 0) {
-        return prev;
-      }
-      const nextIndex = index + direction;
-      if (nextIndex < 0 || nextIndex >= prev.steps.length) {
-        return prev;
-      }
-
-      const next = [...prev.steps];
-      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-      return { ...prev, steps: resequence(next) };
+      return { ...prev, steps: moveStepInList(prev.steps, stepId, direction) };
     });
   }
 
@@ -601,7 +634,7 @@ export default function App() {
       }
       insertIndex = Math.min(Math.max(insertIndex, 0), next.length);
       next.splice(insertIndex, 0, moved);
-      return { ...prev, steps: resequence(next) };
+      return { ...prev, steps: resequenceSteps(next) };
     });
   }
 
@@ -610,9 +643,9 @@ export default function App() {
       if (!prev) {
         return prev;
       }
-      const next = prev.steps.filter((step) => step.id !== stepId);
+      const next = deleteStepById(prev.steps, stepId);
       setSelectedId(next[0]?.id || null);
-      return { ...prev, steps: resequence(next) };
+      return { ...prev, steps: next };
     });
   }
 
@@ -731,7 +764,17 @@ export default function App() {
     if (!payload) {
       return;
     }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const exportPayload = buildSessionExport({
+      exportedAt: Date.now(),
+      session: payload.session,
+      steps: payload.steps,
+      meta: {
+        capturedBy: payload.meta?.capturedBy ?? "unknown",
+        appVersion: payload.meta?.appVersion ?? "0.0.0",
+        syncRevision: payload.meta?.syncRevision ?? payload.session?.sync?.revision ?? 1
+      }
+    });
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -807,11 +850,85 @@ export default function App() {
     const steps = extensionSteps
       .filter((x) => x.sessionId === session.id)
       .sort((a, b) => (a.stepIndex ?? 0) - (b.stepIndex ?? 0) || (a.at ?? 0) - (b.at ?? 0));
-    const normalized = normalizePayload({ session, steps });
+    const migrated = migrateSessionPayload({
+      schemaVersion: APP_SCHEMA_VERSION,
+      exportedAt: Date.now(),
+      session,
+      steps,
+      meta: {
+        capturedBy: "extension-local",
+        appVersion: "0.0.0",
+        syncRevision: session.sync?.revision ?? 1
+      }
+    });
+    const normalized = normalizePayload(migrated);
     setPayload(normalized);
     setSelectedId(normalized.steps[0]?.id || null);
     setError("");
     setExtensionStatus(`Imported session ${session.id} (${steps.length} steps).`);
+  }
+
+  function buildTeamEndpoint(action, query = {}) {
+    const base = String(teamApiBase || "").trim();
+    if (!base) {
+      throw new Error("Team API endpoint is required.");
+    }
+    const url = new URL(base);
+    url.searchParams.set("action", action);
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && String(value) !== "") {
+        url.searchParams.set(key, String(value));
+      }
+    });
+    return url.toString();
+  }
+
+  async function loadFromTeamLibrary() {
+    try {
+      setTeamStatus("Loading team sessions...");
+      const response = await fetch(buildTeamEndpoint("listSessions", { limit: 50 }), {
+        method: "GET",
+        headers: teamAccessToken ? { Authorization: `Bearer ${teamAccessToken}` } : undefined
+      });
+      const body = await response.json();
+      if (!response.ok || body?.ok === false) {
+        throw new Error(body?.errorCode || body?.error || `HTTP_${response.status}`);
+      }
+
+      const items = Array.isArray(body?.items) ? body.items : [];
+      setTeamSessions(items);
+      setSelectedTeamSessionId(items[0]?.sessionId ?? items[0]?.id ?? "");
+      setTeamStatus(items.length ? `Loaded ${items.length} team session(s).` : "No team sessions found.");
+    } catch (err) {
+      setTeamStatus(`Team load failed: ${err instanceof Error ? err.message : "unknown error"}`);
+    }
+  }
+
+  async function importSelectedTeamSession() {
+    if (!selectedTeamSessionId) {
+      return;
+    }
+
+    try {
+      setTeamStatus("Importing team session...");
+      const response = await fetch(buildTeamEndpoint("getSession", { sessionId: selectedTeamSessionId }), {
+        method: "GET",
+        headers: teamAccessToken ? { Authorization: `Bearer ${teamAccessToken}` } : undefined
+      });
+      const body = await response.json();
+      if (!response.ok || body?.ok === false) {
+        throw new Error(body?.errorCode || body?.error || `HTTP_${response.status}`);
+      }
+      const rawPayload = body?.payload ?? body;
+      const migrated = migrateSessionPayload(rawPayload);
+      const normalized = normalizePayload(migrated);
+      setPayload(normalized);
+      setSelectedId(normalized.steps[0]?.id || null);
+      setError("");
+      setTeamStatus(`Imported team session ${normalized.session.id}.`);
+    } catch (err) {
+      setTeamStatus(`Team import failed: ${err instanceof Error ? err.message : "unknown error"}`);
+    }
   }
 
   return (
@@ -838,6 +955,18 @@ export default function App() {
       </div>
 
       <div style={{ marginTop: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <label htmlFor="dataSource" style={{ color: palette.textSoft, fontSize: 12 }}>
+          Source
+        </label>
+        <select
+          id="dataSource"
+          value={dataSource}
+          onChange={(event) => setDataSource(event.target.value)}
+          style={{ padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text, minWidth: 140 }}
+        >
+          <option value="local">Local (Extension)</option>
+          <option value="team">Team Library</option>
+        </select>
         <input
           type="file"
           accept=".json,application/json"
@@ -854,31 +983,84 @@ export default function App() {
           Export HTML
         </button>
       </div>
-      <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <button type="button" onClick={loadFromExtensionStorage} style={buttonStyle(palette, false)}>
-          Load From Extension
-        </button>
-        <select
-          value={selectedExtensionSessionId}
-          onChange={(event) => setSelectedExtensionSessionId(event.target.value)}
-          style={{ padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text, minWidth: 260 }}
-          disabled={!extensionSessions.length}
-        >
-          {!extensionSessions.length ? (
-            <option value="">No extension sessions loaded</option>
-          ) : (
-            extensionSessions.map((session) => (
-              <option key={session.id} value={session.id}>
-                {session.id} ({session.stepsCount} steps)
-              </option>
-            ))
-          )}
-        </select>
-        <button type="button" onClick={importSelectedExtensionSession} style={buttonStyle(palette, !selectedExtensionSessionId)} disabled={!selectedExtensionSessionId}>
-          Import Selected Session
-        </button>
-      </div>
-      {extensionStatus ? <p style={{ marginTop: 8, color: palette.textSoft }}>{extensionStatus}</p> : null}
+      {dataSource === "local" ? (
+        <>
+          <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button type="button" onClick={loadFromExtensionStorage} style={buttonStyle(palette, false)}>
+              Load From Extension
+            </button>
+            <select
+              value={selectedExtensionSessionId}
+              onChange={(event) => setSelectedExtensionSessionId(event.target.value)}
+              style={{ padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text, minWidth: 260 }}
+              disabled={!extensionSessions.length}
+            >
+              {!extensionSessions.length ? (
+                <option value="">No extension sessions loaded</option>
+              ) : (
+                extensionSessions.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {session.id} ({session.stepsCount} steps{session.sync?.status ? ` | ${session.sync.status}` : ""})
+                  </option>
+                ))
+              )}
+            </select>
+            <button type="button" onClick={importSelectedExtensionSession} style={buttonStyle(palette, !selectedExtensionSessionId)} disabled={!selectedExtensionSessionId}>
+              Import Selected Session
+            </button>
+          </div>
+          {extensionStatus ? <p style={{ marginTop: 8, color: palette.textSoft }}>{extensionStatus}</p> : null}
+        </>
+      ) : (
+        <>
+          <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              type="text"
+              value={teamApiBase}
+              placeholder="Apps Script endpoint URL"
+              onChange={(event) => setTeamApiBase(event.target.value)}
+              style={{ minWidth: 320, padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
+            />
+            <input
+              type="password"
+              value={teamAccessToken}
+              placeholder="Bearer token (optional)"
+              onChange={(event) => setTeamAccessToken(event.target.value)}
+              style={{ minWidth: 220, padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
+            />
+            <button type="button" onClick={loadFromTeamLibrary} style={buttonStyle(palette, false)}>
+              Load Team Sessions
+            </button>
+            <select
+              value={selectedTeamSessionId}
+              onChange={(event) => setSelectedTeamSessionId(event.target.value)}
+              style={{ padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text, minWidth: 260 }}
+              disabled={!teamSessions.length}
+            >
+              {!teamSessions.length ? (
+                <option value="">No team sessions loaded</option>
+              ) : (
+                teamSessions.map((session) => {
+                  const id = session.sessionId || session.id;
+                  const title = session.title || session.lastTitle || session.startTitle || id;
+                  return (
+                    <option key={id} value={id}>
+                      {title}
+                    </option>
+                  );
+                })
+              )}
+            </select>
+            <button type="button" onClick={importSelectedTeamSession} style={buttonStyle(palette, !selectedTeamSessionId)} disabled={!selectedTeamSessionId}>
+              Import Team Session
+            </button>
+          </div>
+          {teamStatus ? <p style={{ marginTop: 8, color: palette.textSoft }}>{teamStatus}</p> : null}
+        </>
+      )}
+      <p style={{ marginTop: 6, color: palette.textSoft, fontSize: 12 }}>
+        Privacy warning: screenshots and typed values can include sensitive data. Review before sharing/exporting.
+      </p>
       {error ? <p style={{ color: "#ef4444" }}>{error}</p> : null}
 
       {!payload ? (

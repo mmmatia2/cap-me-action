@@ -11,6 +11,12 @@ const discardBtn = document.getElementById("dockDiscard");
 const minimizeBtn = document.getElementById("dockMinimize");
 const dragHandle = document.getElementById("dockDragHandle");
 const toastEl = document.getElementById("dockToast");
+const minimizeIcon = document.getElementById("dockMinimizeIcon");
+
+const PAUSE_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>';
+const PLAY_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>';
+const MINIMIZE_ICON = '<path fill="currentColor" d="M5 12h14v2H5z"/>';
+const EXPAND_ICON = '<path fill="currentColor" d="M7 12l5-6l5 6H7z"/>';
 
 const state = { isCapturing: false, startedAt: null, stepCount: 0, minimized: false };
 let toastTimer = null;
@@ -27,12 +33,12 @@ function formatDuration(ms) {
 function render() {
   stepEl.textContent = String(state.stepCount ?? 0);
   timerEl.textContent = state.isCapturing && state.startedAt ? formatDuration(Date.now() - state.startedAt) : "00:00";
-  pauseIcon.textContent = state.isCapturing ? "||" : ">";
+  pauseIcon.innerHTML = state.isCapturing ? PAUSE_ICON : PLAY_ICON;
   if (dockRoot) {
     dockRoot.classList.toggle("minimized", Boolean(state.minimized));
   }
-  if (minimizeBtn) {
-    minimizeBtn.textContent = state.minimized ? "^" : "_";
+  if (minimizeBtn && minimizeIcon) {
+    minimizeIcon.innerHTML = state.minimized ? EXPAND_ICON : MINIMIZE_ICON;
   }
 }
 
@@ -100,6 +106,29 @@ if (dragHandle) {
   };
   dragHandle.addEventListener("pointerup", stopDragging);
   dragHandle.addEventListener("pointercancel", stopDragging);
+  dragHandle.addEventListener("keydown", (event) => {
+    const moveBy = event.shiftKey ? 24 : 12;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      send("MOVE_DOCK", { dx: -moveBy, dy: 0 });
+      return;
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      send("MOVE_DOCK", { dx: moveBy, dy: 0 });
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      send("MOVE_DOCK", { dx: 0, dy: -moveBy });
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      send("MOVE_DOCK", { dx: 0, dy: moveBy });
+      return;
+    }
+  });
 }
 setInterval(render, 1000);
 render();

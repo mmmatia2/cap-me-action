@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AutoGuide Recorder</title>
+    <link rel="stylesheet" href="../shared-ui/tokens.css" />
     <style>
       :root {
         color-scheme: dark;
@@ -26,7 +27,7 @@
         margin: 0;
         width: 286px;
         min-height: 560px;
-        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        font-family: var(--font-sans);
         color: var(--text);
         background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
       }
@@ -176,6 +177,27 @@
         background: linear-gradient(180deg, var(--panel) 0%, #0e1d38 100%);
       }
 
+      .actions-row {
+        display: grid;
+        gap: 8px;
+      }
+
+      .secondary-button {
+        width: 100%;
+        border: 1px solid #2c4570;
+        border-radius: 10px;
+        background: #13284a;
+        color: #dbe6ff;
+        font-size: 12px;
+        padding: 8px 10px;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .secondary-button:hover {
+        border-color: #4d6ea8;
+      }
+
       .toggle-row {
         height: 44px;
         padding: 0 12px;
@@ -246,6 +268,15 @@
 
       .toggle-pill.on::after {
         left: 16px;
+      }
+
+      .coming-soon {
+        margin: 0;
+        padding: 8px 10px;
+        border: 1px dashed #2c4570;
+        border-radius: 10px;
+        font-size: 11px;
+        color: var(--muted);
       }
 
       .recent-header {
@@ -373,33 +404,16 @@
           <span id="captureToggleLabel">Start Capture</span>
           <p id="captureStatus">Paused. No active capture.</p>
           <div class="shortcut-row">
-            <kbd>cmd</kbd>
+            <kbd>Alt</kbd>
             <kbd>Shift</kbd>
-            <kbd>L</kbd>
+            <kbd>R</kbd>
           </div>
         </button>
 
-        <section class="toggles" aria-label="Capture options">
-          <div class="toggle-row">
-            <div class="toggle-meta">
-              <div class="toggle-icon">m</div>
-              <div class="toggle-copy">
-                <strong>Microphone</strong>
-                <span>Record voiceover</span>
-              </div>
-            </div>
-            <div class="toggle-pill" aria-hidden="true"></div>
-          </div>
-          <div class="toggle-row">
-            <div class="toggle-meta">
-              <div class="toggle-icon">c</div>
-              <div class="toggle-copy">
-                <strong>Click Effects</strong>
-                <span>Show visual clicks</span>
-              </div>
-            </div>
-            <div class="toggle-pill on" aria-hidden="true"></div>
-          </div>
+        <section class="actions-row" aria-label="Primary actions">
+          <button id="openEditor" class="secondary-button" type="button">Open Last Capture In Editor</button>
+          <button id="downloadLastJson" class="secondary-button" type="button">Download Last Capture JSON</button>
+          <p class="coming-soon">Microphone and visual click effects controls are coming soon.</p>
         </section>
 
         <section aria-label="Recent captures">

@@ -1,5 +1,6 @@
-﻿// Purpose: render persisted capture state inside extension UI.
-// Inputs: popup button events + chrome.storage.local keys. Outputs: capture controls, selected session view, and JSON export.
+// Purpose: render persisted capture/sync state inside extension inspector UI.
+// Inputs: inspector button events + chrome.storage.local keys. Outputs: capture controls, session exports, and sync actions.
+const APP_SCHEMA_VERSION = "1.1.0";
 let selectedSessionId = null;
 
 function renderJson(elementId, value) {
@@ -12,8 +13,12 @@ function setStatusText(text) {
     status.firstChild.textContent = `${text} `;
     return;
   }
-
   status.prepend(document.createTextNode(`${text} `));
+}
+
+function setSyncStatusText(text) {
+  const el = document.getElementById("syncStatus");
+  el.textContent = text;
 }
 
 function setCaptureBadge(isCapturing) {
@@ -45,29 +50,23 @@ function formatStep(step) {
     const keyText = step.key ?? "";
     return `${indexPrefix}[${label}] ${modText ? `${modText}+` : ""}${keyText} on ${targetRef}`.trim();
   }
-
   if (step.type === "input") {
     return `${indexPrefix}[${label}] ${targetRef} = "${step.value ?? ""}"`;
   }
-
   if (step.type === "select") {
     const optionText = step.optionText || step.optionValue || "";
     return `${indexPrefix}[${label}] ${targetRef} -> ${optionText}`.trim();
   }
-
   if (step.type === "toggle") {
     return `${indexPrefix}[${label}] ${targetRef} = ${step.checked ? "checked" : "unchecked"}`;
   }
-
   if (step.type === "navigate") {
     const title = step.pageTitle ? ` ${step.pageTitle}` : "";
     return `${indexPrefix}[${label}]${title} (${step.url ?? ""})`.trim();
   }
-
   if (step.type === "scroll") {
     return `${indexPrefix}[${label}] x:${step.scrollX ?? 0} y:${step.scrollY ?? 0}`;
   }
-
   return `${indexPrefix}[${label}] ${targetRef}`;
 }
 
@@ -77,7 +76,6 @@ function renderStepPreview(steps) {
     const key = step.type || "other";
     counts[key] = (counts[key] ?? 0) + 1;
   });
-
   const summaryParts = Object.entries(counts)
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([type, count]) => `${type}: ${count}`);
@@ -119,13 +117,10 @@ function renderThumbnails(steps) {
   });
 }
 
-// Purpose: choose the default session when no explicit selection is available.
-// Inputs: persisted sessions list. Outputs: most recently updated session or null.
 function getLatestSession(sessions) {
   if (!sessions.length) {
     return null;
   }
-
   return sessions.reduce((latest, current) =>
     (current.updatedAt ?? 0) > (latest.updatedAt ?? 0) ? current : latest
   );
@@ -160,7 +155,8 @@ function renderSessionOptions(sessions, nextSelectedId) {
     const option = document.createElement("option");
     option.value = session.id;
     const ts = new Date(session.updatedAt ?? session.startedAt ?? Date.now()).toLocaleTimeString();
-    option.textContent = `${session.id} (${session.stepsCount} steps, ${ts})`;
+    const syncState = session.sync?.status ? ` | ${session.sync.status}` : "";
+    option.textContent = `${session.id} (${session.stepsCount} steps, ${ts}${syncState})`;
     select.appendChild(option);
   });
 
@@ -169,11 +165,26 @@ function renderSessionOptions(sessions, nextSelectedId) {
   return resolved;
 }
 
+function buildSessionExport(selectedSession, selectedSteps) {
+  return {
+    schemaVersion: APP_SCHEMA_VERSION,
+    exportedAt: Date.now(),
+    session: selectedSession,
+    steps: selectedSteps,
+    meta: {
+      capturedBy: "unknown",
+      appVersion: chrome.runtime.getManifest().version,
+      syncRevision: Number(selectedSession?.sync?.revision ?? 1)
+    }
+  };
+}
+
 function refreshCaptureState() {
-  chrome.storage.local.get(["captureState", "sessions", "steps"], (result) => {
+  chrome.storage.local.get(["captureState", "sessions", "steps", "syncConfig"], (result) => {
     const captureState = result.captureState ?? { isCapturing: false, startedAt: null };
     const sessions = result.sessions ?? [];
     const allSteps = result.steps ?? [];
+    const syncConfig = result.syncConfig ?? {};
     const fallback = getLatestSession(sessions);
     selectedSessionId = renderSessionOptions(sessions, selectedSessionId ?? fallback?.id ?? null);
     const selectedSession = selectedSessionId
@@ -183,13 +194,16 @@ function refreshCaptureState() {
 
     setStatusText(
       selectedSession
-      ? captureState.isCapturing
-        ? "Capturing. Selected session loaded."
-        : "Not capturing. Selected session loaded."
-      : captureState.isCapturing
-        ? "Capturing. No session found yet."
-        : "Not capturing. No session found yet."
+        ? captureState.isCapturing
+          ? "Capturing. Selected session loaded."
+          : "Not capturing. Selected session loaded."
+        : captureState.isCapturing
+          ? "Capturing. No session found yet."
+          : "Not capturing. No session found yet."
     );
+    const syncLabel = selectedSession?.sync?.status ?? "local";
+    const endpointReady = syncConfig.enabled && syncConfig.endpointUrl;
+    setSyncStatusText(`Sync status: ${syncLabel}${endpointReady ? "" : " (endpoint disabled)"}`);
     setCaptureBadge(Boolean(captureState.isCapturing));
     renderJson("session", selectedSession);
     renderStepPreview(sessionSteps);
@@ -208,11 +222,7 @@ function withSelectedSessionData(onResolved) {
       ? sessions.find((x) => x.id === selectedSessionId) ?? null
       : getLatestSession(sessions);
     const payload = selectedSession
-      ? {
-          exportedAt: Date.now(),
-          session: selectedSession,
-          steps: getSessionSteps(allSteps, selectedSession.id)
-        }
+      ? buildSessionExport(selectedSession, getSessionSteps(allSteps, selectedSession.id))
       : null;
     onResolved(payload);
   });
@@ -244,7 +254,6 @@ function copySelectedSessionJson() {
     }
 
     const text = JSON.stringify(payload, null, 2);
-
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
@@ -316,7 +325,6 @@ function discardLastStep() {
     setStatusText("No selected session to discard from.");
     return;
   }
-
   chrome.runtime.sendMessage(
     { type: "DISCARD_LAST_STEP", payload: { sessionId: selectedSessionId } },
     (response) => {
@@ -330,8 +338,6 @@ function discardLastStep() {
   );
 }
 
-// Purpose: clear one selected session and its related steps/tab mappings.
-// Inputs: selectedSessionId + storage state. Outputs: updated sessions/steps/sessionByTab collections.
 function clearSelectedSession() {
   chrome.storage.local.get(["sessions", "steps", "sessionByTab"], (result) => {
     const sessions = result.sessions ?? [];
@@ -362,16 +368,54 @@ function clearSelectedSession() {
 function resetAllCaptureData() {
   chrome.storage.local.set(
     {
+      storageVersion: 2,
+      schemaVersion: APP_SCHEMA_VERSION,
       captureState: { isCapturing: false, startedAt: null },
       sessions: [],
       steps: [],
       sessionByTab: {},
-      eventLog: []
+      eventLog: [],
+      syncQueue: [],
+      syncState: { lastRunAt: null, successCount: 0, failureCount: 0, quotaWarning: false },
+      teamLibraryCache: { items: [], updatedAt: null }
     },
     () => {
       selectedSessionId = null;
       setStatusText("All capture data reset.");
       refreshCaptureState();
+    }
+  );
+}
+
+function syncSelectedSession() {
+  if (!selectedSessionId) {
+    setStatusText("No selected session to sync.");
+    return;
+  }
+  chrome.runtime.sendMessage(
+    { type: "SYNC_SESSION_BY_ID", payload: { sessionId: selectedSessionId } },
+    (response) => {
+      if (!response?.ok) {
+        setStatusText(`Sync enqueue failed: ${response?.error ?? "unknown error"}`);
+        return;
+      }
+      setStatusText("Session queued for sync.");
+      refreshCaptureState();
+    }
+  );
+}
+
+function openSelectedInEditor() {
+  if (!selectedSessionId) {
+    setStatusText("No selected session to open.");
+    return;
+  }
+  chrome.runtime.sendMessage(
+    { type: "OPEN_EDITOR", payload: { source: "local", sessionId: selectedSessionId } },
+    (response) => {
+      if (!response?.ok) {
+        setStatusText(`Open editor failed: ${response?.error ?? "unknown error"}`);
+      }
     }
   );
 }
@@ -383,6 +427,8 @@ document.getElementById("sessionSelect").addEventListener("change", (event) => {
 document.getElementById("startCapture").addEventListener("click", () => setCaptureMode("START_CAPTURE"));
 document.getElementById("stopCapture").addEventListener("click", () => setCaptureMode("STOP_CAPTURE"));
 document.getElementById("refresh").addEventListener("click", refreshCaptureState);
+document.getElementById("syncSelected").addEventListener("click", syncSelectedSession);
+document.getElementById("openEditor").addEventListener("click", openSelectedInEditor);
 document.getElementById("exportJson").addEventListener("click", exportSelectedSessionJson);
 document.getElementById("copyJson").addEventListener("click", copySelectedSessionJson);
 document.getElementById("copyStepsOnly").addEventListener("click", copyStepsOnly);
