@@ -3,107 +3,219 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Floating Recorder Dock</title>
-    <link rel="stylesheet" href="../shared-ui/tokens.css" />
+    <title>Scribe Clone Dock</title>
     <style>
-      :root { color-scheme: dark; }
-      html, body {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        background: transparent;
-        font-family: "Segoe UI", system-ui, sans-serif;
+      :root {
+        color-scheme: light dark;
+        --bg-color: #ffffff;
+        --border-color: #e2e8f0;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --accent: #4f46e5;
+        --accent-hover: #4338ca;
+        --danger: #ef4444;
       }
-      .dock {
-        width: 100%;
-        height: 60px;
+      
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-color: #1e293b;
+          --border-color: #334155;
+          --text-main: #f8fafc;
+          --text-muted: #94a3b8;
+          --accent: #6366f1;
+          --accent-hover: #4f46e5;
+        }
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         overflow: hidden;
-        border-radius: 999px;
+      }
+
+      .dock-root {
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 0 10px;
-        border: 1px solid rgba(255,255,255,0.12);
-        background: rgba(15, 18, 24, 0.92);
-        box-shadow: 0 10px 26px rgba(0,0,0,0.42);
-      }
-      #dockDragHandle { width: 20px; height: 20px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16); cursor: move; }
-      .live { width: 8px; height: 8px; border-radius: 999px; background: #ff4f5e; box-shadow: 0 0 10px rgba(255,79,94,0.7); }
-      #dockTimer { font-family: Consolas, monospace; font-size: 16px; color: #eef2ff; }
-      .step-pill {
-        border: 1px solid rgba(255,255,255,0.14);
-        background: rgba(255,255,255,0.05);
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
         border-radius: 999px;
-        height: 28px;
+        padding: 8px 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        gap: 12px;
+        height: 52px;
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        width: 100%;
+      }
+
+      .drag-handle {
+        cursor: grab;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        padding: 4px;
+        margin-left: -4px;
+        border-radius: 4px;
+      }
+
+      .drag-handle:hover {
+        background: rgba(100, 116, 139, 0.1);
+        color: var(--text-main);
+      }
+
+      .drag-handle:active {
+        cursor: grabbing;
+      }
+
+      .recording-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 5px;
+        background: var(--danger);
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+        70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+      }
+
+      .stats {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--text-main);
+        font-variant-numeric: tabular-nums;
+        font-weight: 500;
+        font-size: 14px;
+      }
+
+      .stat-item {
         display: flex;
         align-items: center;
         gap: 6px;
-        padding: 0 10px;
       }
-      .step-pill small { font-size: 10px; color: #8f99ad; text-transform: uppercase; }
-      #dockStepCount { font-weight: 700; color: #fff; font-size: 14px; }
-      .spacer { flex: 1; }
-      .actions { display: flex; align-items: center; gap: 2px; }
-      button {
-        width: 30px; height: 30px; border-radius: 999px;
-        border: 0; background: transparent; color: #b5bfce; cursor: pointer; font-size: 11px; font-weight: 700;
+
+      .stat-icon {
+        color: var(--text-muted);
       }
-      button:hover { background: rgba(255,255,255,0.08); color: #fff; }
-      button:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
+
+      .divider {
+        width: 1px;
+        height: 24px;
+        background: var(--border-color);
       }
-      #dockFinish {
-        width: 34px; height: 34px; background: radial-gradient(circle at 35% 35%, #ff5f66, #d8252e);
-        color: #fff; border: 1px solid rgba(255,255,255,0.24);
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: auto;
       }
-      #dockDiscard:hover { color: #ff7a80; }
-      #dockMinimize:hover { color: #93a6cd; }
-      #dockToast {
-        position: absolute; left: 50%; transform: translateX(-50%); top: 4px;
-        color: #d8e1f5; font-size: 12px; background: rgba(14, 18, 24, 0.9);
-        border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 4px 10px;
-        opacity: 0; transition: opacity .2s ease;
+
+      .btn {
+        background: transparent;
+        border: none;
+        color: var(--text-main);
+        width: 32px;
+        height: 32px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        padding: 0;
       }
-      #dockToast.show { opacity: 1; }
-      .dock.minimized .live,
-      .dock.minimized #dockTimer,
-      .dock.minimized .step-pill,
-      .dock.minimized .spacer {
+
+      .btn:hover {
+        background: rgba(100, 116, 139, 0.1);
+      }
+
+      .btn.primary {
+        background: var(--accent);
+        color: white;
+      }
+
+      .btn.primary:hover {
+        background: var(--accent-hover);
+      }
+
+      .toast {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%) translateY(10px);
+        background: var(--text-main);
+        color: var(--bg-color);
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        pointer-events: none;
+        opacity: 0;
+        transition: all 0.2s;
+        white-space: nowrap;
+        margin-bottom: 8px;
+      }
+
+      .toast.show {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+
+      .dock-root.minimized .stats,
+      .dock-root.minimized .divider,
+      .dock-root.minimized .btn:not(.minimize-btn) {
         display: none;
-      }
-      .dock.minimized {
-        justify-content: space-between;
-        padding: 0 8px;
       }
     </style>
   </head>
   <body>
-    <div id="dockRoot" class="dock">
-      <div id="dockDragHandle" tabindex="0" aria-label="Drag Dock"></div>
-      <div class="live" aria-hidden="true"></div>
-      <span id="dockTimer">00:00</span>
-      <div class="step-pill"><small>Step</small><span id="dockStepCount">0</span></div>
-      <div class="spacer"></div>
+    <div id="dockRoot" class="dock-root">
+      <div id="dockToast" class="toast"></div>
+      
+      <div id="dockDragHandle" class="drag-handle" title="Drag to move">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>
+      </div>
+
+      <div class="recording-indicator" title="Recording in progress"></div>
+
+      <div class="stats">
+        <div class="stat-item" title="Duration">
+          <svg class="stat-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span id="dockTimer">00:00</span>
+        </div>
+        <div class="stat-item" title="Steps captured">
+          <svg class="stat-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          <span id="dockStepCount">0</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
       <div class="actions">
-        <button id="dockDiscard" aria-label="Discard">
-          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4h10l1 2h4v2h-2l-1 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 8H2V6h4l1-2zm2 0l-.5 1h7L15 4H9zm0 6v9h2v-9H9zm4 0v9h2v-9h-2z"/></svg>
-        </button>
-        <button id="dockPause" aria-label="Pause Or Resume">
-          <span id="dockPauseIcon" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>
+        <button id="dockPause" class="btn" title="Pause / Resume (Alt+Shift+R)">
+          <span id="dockPauseIcon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
           </span>
         </button>
-        <button id="dockFinish" aria-label="Finish Recording">
-          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 7h10v10H7z"/></svg>
+        <button id="dockDiscard" class="btn" title="Discard last step (Alt+Shift+Z)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
         </button>
-        <button id="dockMinimize" aria-label="Minimize">
-          <svg id="dockMinimizeIcon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 12h14v2H5z"/></svg>
+        <button id="dockFinish" class="btn primary" title="Finish recording">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </button>
+        <div class="divider" style="margin: 0 4px; height: 16px;"></div>
+        <button id="dockMinimize" class="btn minimize-btn" title="Minimize / Expand (Alt+Shift+M)">
+          <span id="dockMinimizeIcon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+          </span>
         </button>
       </div>
     </div>
-    <div id="dockToast">Step discarded</div>
     <script src="dock.js"></script>
   </body>
 </html>

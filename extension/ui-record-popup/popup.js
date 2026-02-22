@@ -142,10 +142,20 @@ async function refreshState() {
   const latestStepBySession = getLatestStepBySession(store.steps ?? []);
   const isCapturing = Boolean(captureState.isCapturing);
 
-  captureToggleLabel.textContent = isCapturing ? "Stop Capture" : "Start Capture";
+  captureToggleLabel.textContent = isCapturing ? "Stop Recording" : "Start Recording";
   captureStatus.textContent = isCapturing
-    ? "Capturing now. Actions are being recorded. Hotkey: Alt+Shift+R"
-    : "Paused. No active capture. Hotkeys: Alt+Shift+R (toggle), Alt+Shift+Z (discard), Alt+Shift+M (dock).";
+    ? "Recording in progress..."
+    : "Click to start capturing clicks & types";
+    
+  const dot = document.getElementById("captureDot");
+  if (dot) {
+    if (isCapturing) {
+      dot.classList.add("recording");
+    } else {
+      dot.classList.remove("recording");
+    }
+  }
+
   renderRecentSessions(sessions, latestStepBySession);
 }
 

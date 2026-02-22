@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { APP_SCHEMA_VERSION, buildSessionExport, migrateSessionPayload } from "./lib/migrations";
 import { deleteStepById, moveStepInList, patchStepById, resequenceSteps } from "./editor/state/sessionReducer";
+import { StepList } from "./editor/components/StepList";
+import { StepDetails } from "./editor/components/StepDetails";
+import { AnnotationCanvas } from "./editor/components/AnnotationCanvas";
+import { ExportPanel } from "./editor/components/ExportPanel";
+import { Download, UploadCloud, Cloud, Moon, Sun, MonitorSmartphone, Share2, Trash2, GripVertical, FileCode2, FileText, FileJson } from "lucide-react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 // Purpose: provide a practical step editor for exported recorder sessions.
 // Inputs: exported session JSON files, extension storage sessions, and in-app edits.
@@ -496,7 +503,7 @@ export default function App() {
   const [selectedTeamSessionId, setSelectedTeamSessionId] = useState("");
   const [teamStatus, setTeamStatus] = useState("");
   const [dragState, setDragState] = useState({ dragId: "", overId: "", placement: "after" });
-  const [annotationMode, setAnnotationMode] = useState(false);
+  const [annotationMode, setAnnotationMode] = useState(null);
   const [draftAnnotation, setDraftAnnotation] = useState(null);
   const [activeAnnotationId, setActiveAnnotationId] = useState("");
   const screenshotRef = useRef(null);
@@ -696,16 +703,17 @@ export default function App() {
     setDragState({ dragId: "", overId: "", placement: "after" });
   }
 
-  function onStepDragEnd() {
-    setDragState({ dragId: "", overId: "", placement: "after" });
-  }
-
-  function toRelativePoint(event, rect) {
+function patchStep(stepId, patchFn) {
+  setPayload((prev) => {
+    if (!prev) {
+      return prev;
+    }
     return {
-      x: clampUnit((event.clientX - rect.left) / rect.width),
-      y: clampUnit((event.clientY - rect.top) / rect.height)
+      ...prev,
+      steps: patchStepById(prev.steps, stepId, patchFn)
     };
-  }
+  });
+}
 
   function buildRelativeRect(start, end) {
     const x = Math.min(start.x, end.x);
@@ -747,13 +755,15 @@ export default function App() {
       const annotation = {
         id: `ann_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         ...nextRect,
-        label: ""
+        label: "",
+        type: annotationMode || "highlight"
       };
       patchStep(stepId, (step) => ({
         ...step,
         annotations: [...(step.annotations ?? []), annotation]
       }));
       setActiveAnnotationId(annotation.id);
+      setAnnotationMode(null);
     };
 
     window.addEventListener("mousemove", onMove);
@@ -807,6 +817,76 @@ export default function App() {
     a.download = `cap-me-guide-${payload.session?.id || "session"}.html`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function exportPdf() {
+    if (!payload) return;
+    try {
+      const doc = new jsPDF();
+      const title = payload.session.lastTitle || payload.session.startTitle || "Scribe Clone Export";
+      
+      // Title
+      doc.setFontSize(24);
+      doc.text(title, 14, 20);
+      
+      // Metadata
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(`${payload.steps.length} steps • Created on ${new Date(payload.session.startedAt || Date.now()).toLocaleDateString()}`, 14, 30);
+
+      // Reset text color
+      doc.setTextColor(0);
+
+      let yPos = 45;
+      const margin = 14;
+      const pageWidth = doc.internal.pageSize.width;
+      const contentWidth = pageWidth - (margin * 2);
+
+      payload.steps.forEach((step, index) => {
+        // Add new page if we're near the bottom
+        if (yPos > doc.internal.pageSize.height - 40) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        // Step number and title
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        const stepTitle = `${step.stepIndex}. ${step.title || 'Untitled Step'}`;
+        const titleLines = doc.splitTextToSize(stepTitle, contentWidth);
+        doc.text(titleLines, margin, yPos);
+        yPos += (titleLines.length * 7) + 2;
+
+        // Step instruction
+        if (step.instruction) {
+          doc.setFontSize(11);
+          doc.setFont(undefined, 'normal');
+          const instructionLines = doc.splitTextToSize(step.instruction, contentWidth);
+          doc.text(instructionLines, margin, yPos);
+          yPos += (instructionLines.length * 6) + 4;
+        }
+
+        // Step note
+        if (step.note) {
+          doc.setFontSize(10);
+          doc.setTextColor(100);
+          const noteLines = doc.splitTextToSize(step.note, contentWidth - 10);
+          doc.text(noteLines, margin + 5, yPos);
+          doc.setTextColor(0);
+          yPos += (noteLines.length * 5) + 4;
+        }
+
+        // We can't easily embed images without loading them first and converting to base64
+        // If the thumbnailDataUrl is a data URL, we could theoretically embed it, but for now
+        // we'll just leave a placeholder or skip it since handling arbitrary URLs in jsPDF is tricky
+        yPos += 10;
+      });
+
+      doc.save(`${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      alert("Failed to generate PDF. See console for details.");
+    }
   }
 
   function loadFromExtensionStorage() {
@@ -932,351 +1012,334 @@ export default function App() {
   }
 
   return (
-    <main
-      style={{
-        fontFamily: "Segoe UI, sans-serif",
-        padding: 16,
-        color: palette.text,
-        background: palette.bg,
-        minHeight: "100vh",
-        width: "100%",
-        overflowX: "hidden",
-        boxSizing: "border-box"
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h1 style={{ marginTop: 0, marginBottom: 4 }}>Cap Me Action Editor</h1>
-          <p style={{ margin: 0, color: palette.textSoft }}>Import a session, reorder steps by drag/drop, annotate screenshots, and export JSON or Markdown.</p>
+    <main className="min-h-screen bg-bg text-text font-sans flex flex-col">
+      <header className="sticky top-0 z-10 bg-surface border-b border-border shadow-sm px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-accent text-white flex items-center justify-center font-bold">
+            S
+          </div>
+          <div>
+            <h1 className="text-lg font-bold leading-tight m-0">Scribe Clone Editor</h1>
+            <p className="text-xs text-muted m-0">Organize, annotate, and export your captured workflows</p>
+          </div>
         </div>
-        <button type="button" style={buttonStyle(palette, false)} onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
-          Theme: {theme}
-        </button>
-      </div>
+        <div className="flex items-center gap-4">
+          <button 
+            type="button" 
+            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+            className="p-2 rounded-full text-muted hover:text-text hover:bg-surface-2 transition-colors"
+            title="Toggle theme"
+          >
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          
+          <div className="h-6 w-px bg-border mx-1" />
 
-      <div style={{ marginTop: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <label htmlFor="dataSource" style={{ color: palette.textSoft, fontSize: 12 }}>
-          Source
-        </label>
-        <select
-          id="dataSource"
-          value={dataSource}
-          onChange={(event) => setDataSource(event.target.value)}
-          style={{ padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text, minWidth: 140 }}
-        >
-          <option value="local">Local (Extension)</option>
-          <option value="team">Team Library</option>
-        </select>
-        <input
-          type="file"
-          accept=".json,application/json"
-          onChange={onFileSelected}
-          style={{ maxWidth: "320px", color: palette.textSoft }}
-        />
-        <button type="button" onClick={exportJson} disabled={!payload} style={{ ...buttonStyle(palette, !payload), marginLeft: 8 }}>
-          Export JSON
-        </button>
-        <button type="button" onClick={exportMarkdown} disabled={!payload} style={{ ...buttonStyle(palette, !payload), marginLeft: 8 }}>
-          Export Markdown
-        </button>
-        <button type="button" onClick={exportHtml} disabled={!payload} style={{ ...buttonStyle(palette, !payload), marginLeft: 8 }}>
-          Export HTML
-        </button>
-      </div>
-      {dataSource === "local" ? (
-        <>
-          <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <button type="button" onClick={loadFromExtensionStorage} style={buttonStyle(palette, false)}>
-              Load From Extension
-            </button>
-            <select
-              value={selectedExtensionSessionId}
-              onChange={(event) => setSelectedExtensionSessionId(event.target.value)}
-              style={{ padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text, minWidth: 260 }}
-              disabled={!extensionSessions.length}
-            >
-              {!extensionSessions.length ? (
-                <option value="">No extension sessions loaded</option>
-              ) : (
-                extensionSessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {session.id} ({session.stepsCount} steps{session.sync?.status ? ` | ${session.sync.status}` : ""})
-                  </option>
-                ))
-              )}
-            </select>
-            <button type="button" onClick={importSelectedExtensionSession} style={buttonStyle(palette, !selectedExtensionSessionId)} disabled={!selectedExtensionSessionId}>
-              Import Selected Session
-            </button>
-          </div>
-          {extensionStatus ? <p style={{ marginTop: 8, color: palette.textSoft }}>{extensionStatus}</p> : null}
-        </>
-      ) : (
-        <>
-          <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <input
-              type="text"
-              value={teamApiBase}
-              placeholder="Apps Script endpoint URL"
-              onChange={(event) => setTeamApiBase(event.target.value)}
-              style={{ minWidth: 320, padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
+          {payload && (
+            <ExportPanel 
+              disabled={!payload}
+              onJson={exportJson}
+              onMarkdown={exportMarkdown}
+              onHtml={exportHtml}
+              onPdf={exportPdf}
             />
-            <input
-              type="password"
-              value={teamAccessToken}
-              placeholder="Bearer token (optional)"
-              onChange={(event) => setTeamAccessToken(event.target.value)}
-              style={{ minWidth: 220, padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
-            />
-            <button type="button" onClick={loadFromTeamLibrary} style={buttonStyle(palette, false)}>
-              Load Team Sessions
-            </button>
-            <select
-              value={selectedTeamSessionId}
-              onChange={(event) => setSelectedTeamSessionId(event.target.value)}
-              style={{ padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text, minWidth: 260 }}
-              disabled={!teamSessions.length}
-            >
-              {!teamSessions.length ? (
-                <option value="">No team sessions loaded</option>
-              ) : (
-                teamSessions.map((session) => {
-                  const id = session.sessionId || session.id;
-                  const title = session.title || session.lastTitle || session.startTitle || id;
-                  return (
-                    <option key={id} value={id}>
-                      {title}
-                    </option>
-                  );
-                })
-              )}
-            </select>
-            <button type="button" onClick={importSelectedTeamSession} style={buttonStyle(palette, !selectedTeamSessionId)} disabled={!selectedTeamSessionId}>
-              Import Team Session
-            </button>
-          </div>
-          {teamStatus ? <p style={{ marginTop: 8, color: palette.textSoft }}>{teamStatus}</p> : null}
-        </>
-      )}
-      <p style={{ marginTop: 6, color: palette.textSoft, fontSize: 12 }}>
-        Privacy warning: screenshots and typed values can include sensitive data. Review before sharing/exporting.
-      </p>
-      {error ? <p style={{ color: "#ef4444" }}>{error}</p> : null}
+          )}
+        </div>
+      </header>
 
-      {!payload ? (
-        <p style={{ marginTop: 24, color: palette.textSoft }}>No file loaded yet.</p>
-      ) : (
-        <section style={{ display: "grid", gridTemplateColumns: "380px minmax(0, 1fr)", gap: 16, marginTop: 16 }}>
-          <aside style={{ border: `1px solid ${palette.border}`, background: palette.surface, borderRadius: 10, padding: 12, maxHeight: 620, overflow: "auto" }}>
-            <h2 style={{ fontSize: 16, margin: "0 0 8px" }}>
-              Session: {payload.session.id} ({payload.steps.length} steps)
+      <div className="flex-1 flex flex-col overflow-hidden max-w-[1400px] w-full mx-auto px-6 py-6">
+        {!payload && (
+          <div className="bg-surface border border-border rounded-xl p-6 mb-6 shadow-sm flex flex-col gap-5">
+            <h2 className="text-base font-semibold m-0 flex items-center gap-2">
+              <UploadCloud size={18} className="text-accent" />
+              Import Session
             </h2>
-            {payload.steps.map((step, idx) => (
-              <div
-                key={step.id}
-                draggable
-                onDragStart={(event) => onStepDragStart(step.id, event)}
-                onDragOver={(event) => onStepDragOver(step.id, event)}
-                onDrop={(event) => onStepDrop(step.id, event)}
-                onDragEnd={onStepDragEnd}
-                style={{
-                  border: `1px solid ${palette.border}`,
-                  borderRadius: 8,
-                  padding: 8,
-                  marginBottom: 8,
-                  background: step.id === selectedStep?.id ? palette.surfaceAlt : palette.surface,
-                  boxShadow:
-                    dragState.overId === step.id
-                      ? `inset 0 ${dragState.placement === "before" ? "2" : "-2"}px 0 ${palette.accent}`
-                      : "none"
-                }}
-              >
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ color: palette.textSoft, cursor: "grab", userSelect: "none", fontSize: 13 }} title="Drag to reorder">
-                    Drag
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(step.id)}
-                    style={{ width: "100%", textAlign: "left", border: 0, background: "transparent", padding: 0, cursor: "pointer", color: palette.text, fontWeight: 600 }}
-                  >
-                    #{step.stepIndex} {step.title}
-                  </button>
-                </div>
-                <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
-                  <button type="button" onClick={() => moveStep(step.id, -1)} disabled={idx === 0} style={buttonStyle(palette, idx === 0)}>
-                    Up
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveStep(step.id, 1)}
-                    disabled={idx === payload.steps.length - 1}
-                    style={buttonStyle(palette, idx === payload.steps.length - 1)}
-                  >
-                    Down
-                  </button>
-                  <button type="button" onClick={() => deleteStep(step.id)} style={{ ...buttonStyle(palette, false), color: "#ef4444" }}>
-                    Delete
-                  </button>
-                </div>
+            
+            <div className="flex flex-wrap gap-4 items-end">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="dataSource" className="text-xs font-semibold text-muted uppercase tracking-wider">
+                  Source
+                </label>
+                <select
+                  id="dataSource"
+                  value={dataSource}
+                  onChange={(event) => setDataSource(event.target.value)}
+                  className="px-3 py-2 rounded-lg border border-border bg-surface-2 text-text focus:outline-none focus:border-accent min-w-[160px]"
+                >
+                  <option value="local">Local (Extension)</option>
+                  <option value="team">Team Library</option>
+                </select>
               </div>
-            ))}
-          </aside>
 
-          <article style={{ border: `1px solid ${palette.border}`, background: palette.surface, borderRadius: 10, padding: 12, minWidth: 0 }}>
-            {!selectedStep ? (
-              <p style={{ color: palette.textSoft }}>Select a step.</p>
-            ) : (
-              <>
-                <h2 style={{ marginTop: 0 }}>Step #{selectedStep.stepIndex}</h2>
+              {dataSource === "local" ? (
+                <div className="flex flex-wrap gap-3 items-end w-full">
+                  <button 
+                    type="button" 
+                    onClick={loadFromExtensionStorage} 
+                    className="px-4 py-2 bg-surface text-text border border-border rounded-lg hover:bg-surface-2 font-medium text-sm transition-colors flex items-center gap-2"
+                  >
+                    <MonitorSmartphone size={16} />
+                    Load From Extension
+                  </button>
+                  <select
+                    value={selectedExtensionSessionId}
+                    onChange={(event) => setSelectedExtensionSessionId(event.target.value)}
+                    className="px-3 py-2 rounded-lg border border-border bg-surface-2 text-text focus:outline-none focus:border-accent min-w-[280px]"
+                    disabled={!extensionSessions.length}
+                  >
+                    {!extensionSessions.length ? (
+                      <option value="">No extension sessions loaded</option>
+                    ) : (
+                      extensionSessions.map((session) => (
+                        <option key={session.id} value={session.id}>
+                          {session.id} ({session.stepsCount} steps{session.sync?.status ? ` | ${session.sync.status}` : ""})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <button 
+                    type="button" 
+                    onClick={importSelectedExtensionSession} 
+                    disabled={!selectedExtensionSessionId}
+                    className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition-colors"
+                  >
+                    Import Selected
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-3 items-end w-full">
+                  <div className="flex flex-col gap-1.5 flex-1 min-w-[240px]">
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider">Endpoint URL</label>
+                    <input
+                      type="text"
+                      value={teamApiBase}
+                      placeholder="Apps Script endpoint URL"
+                      onChange={(event) => setTeamApiBase(event.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-surface-2 text-text focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider">Bearer Token</label>
+                    <input
+                      type="password"
+                      value={teamAccessToken}
+                      placeholder="(optional)"
+                      onChange={(event) => setTeamAccessToken(event.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-surface-2 text-text focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={loadFromTeamLibrary} 
+                    className="px-4 py-2 bg-surface text-text border border-border rounded-lg hover:bg-surface-2 font-medium text-sm transition-colors flex items-center gap-2"
+                  >
+                    <Cloud size={16} />
+                    Load Library
+                  </button>
+                  <select
+                    value={selectedTeamSessionId}
+                    onChange={(event) => setSelectedTeamSessionId(event.target.value)}
+                    className="px-3 py-2 rounded-lg border border-border bg-surface-2 text-text focus:outline-none focus:border-accent min-w-[240px]"
+                    disabled={!teamSessions.length}
+                  >
+                    {!teamSessions.length ? (
+                      <option value="">No team sessions loaded</option>
+                    ) : (
+                      teamSessions.map((session) => {
+                        const id = session.sessionId || session.id;
+                        const title = session.title || session.lastTitle || session.startTitle || id;
+                        return (
+                          <option key={id} value={id}>
+                            {title}
+                          </option>
+                        );
+                      })
+                    )}
+                  </select>
+                  <button 
+                    type="button" 
+                    onClick={importSelectedTeamSession} 
+                    disabled={!selectedTeamSessionId}
+                    className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition-colors"
+                  >
+                    Import Team Session
+                  </button>
+                </div>
+              )}
+            </div>
 
-                <label htmlFor="title" style={{ display: "block", fontWeight: 600 }}>Title</label>
-                <input
-                  id="title"
-                  value={selectedStep.title}
-                  onChange={(event) => updateStep(selectedStep.id, { title: event.target.value })}
-                  style={{ width: "100%", marginTop: 4, marginBottom: 10, padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
+            <div className="flex items-center gap-4 pt-4 border-t border-border">
+              <span className="text-sm text-muted font-medium">Or upload JSON file directly:</span>
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={onFileSelected}
+                className="text-sm text-muted file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-surface-2 file:text-text hover:file:bg-surface-2/80 cursor-pointer"
+              />
+            </div>
+            
+            {(extensionStatus || teamStatus) && (
+              <p className="text-sm text-accent m-0 bg-accent/10 px-3 py-2 rounded-md border border-accent/20">
+                {dataSource === "local" ? extensionStatus : teamStatus}
+              </p>
+            )}
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-6 p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm font-medium flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-danger/20 flex items-center justify-center font-bold">!</span>
+            {error}
+          </div>
+        )}
+
+        {payload && (
+          <div className="flex-1 flex gap-6 min-h-0">
+            {/* Sidebar List */}
+            <aside className="w-[380px] flex-shrink-0 flex flex-col bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-border bg-surface flex justify-between items-center">
+                <h2 className="text-base font-bold m-0 text-text truncate pr-4">
+                  {payload.session.lastTitle || payload.session.startTitle || payload.session.id}
+                </h2>
+                <span className="text-xs font-semibold bg-surface-2 text-muted px-2 py-1 rounded-md whitespace-nowrap">
+                  {payload.steps.length} steps
+                </span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                <StepList 
+                  steps={payload.steps}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onMove={moveStep}
+                  onDelete={deleteStep}
+                  onMergeWithNext={mergeStepWithNext}
+                  onDragStart={onStepDragStart}
+                  onDragOver={onStepDragOver}
+                  onDrop={onStepDrop}
+                  onDragEnd={onStepDragEnd}
+                  dragState={dragState}
                 />
+              </div>
+            </aside>
 
-                <label htmlFor="instruction" style={{ display: "block", fontWeight: 600 }}>Instruction</label>
-                <textarea
-                  id="instruction"
-                  rows={3}
-                  value={selectedStep.instruction}
-                  onChange={(event) => updateStep(selectedStep.id, { instruction: event.target.value })}
-                  style={{ width: "100%", marginTop: 4, marginBottom: 10, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
-                />
+            {/* Main Content Area */}
+            <article className="flex-1 flex flex-col bg-surface border border-border rounded-xl shadow-sm overflow-y-auto custom-scrollbar relative">
+              {!selectedStep ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-muted p-12 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-surface-2 flex items-center justify-center mb-4 border border-border">
+                    <MonitorSmartphone size={32} className="opacity-50" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-text mb-2">No Step Selected</h3>
+                  <p className="max-w-md">Select a step from the sidebar to edit its title, instructions, and annotate its screenshot.</p>
+                </div>
+              ) : (
+                <div className="p-8 max-w-3xl mx-auto w-full flex flex-col gap-8">
+                  <div className="flex items-center gap-3 border-b border-border pb-4">
+                    <span className="w-8 h-8 rounded-full bg-accent/10 text-accent flex items-center justify-center font-bold text-sm">
+                      {selectedStep.stepIndex}
+                    </span>
+                    <h2 className="text-xl font-bold m-0 text-text">Edit Step</h2>
+                  </div>
 
-                <label htmlFor="note" style={{ display: "block", fontWeight: 600 }}>Note (optional)</label>
-                <textarea
-                  id="note"
-                  rows={2}
-                  value={selectedStep.note}
-                  onChange={(event) => updateStep(selectedStep.id, { note: event.target.value })}
-                  style={{ width: "100%", marginTop: 4, marginBottom: 10, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
-                />
+                  <StepDetails 
+                    title={selectedStep.title}
+                    instruction={selectedStep.instruction}
+                    note={selectedStep.note}
+                    onChange={(patch) => updateStep(selectedStep.id, patch)}
+                  />
 
-                {selectedStep.thumbnailDataUrl ? (
-                  <>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <h3 style={{ margin: 0 }}>Screenshot Annotation</h3>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          type="button"
-                          onClick={() => setAnnotationMode((prev) => !prev)}
-                          style={{
-                            ...buttonStyle(palette, false),
-                            background: annotationMode ? palette.accent : palette.surface,
-                            color: annotationMode ? "#ffffff" : palette.text
-                          }}
-                        >
-                          {annotationMode ? "Drawing On" : "Draw Highlight"}
-                        </button>
-                        <button type="button" onClick={() => deleteAnnotation(selectedStep.id, activeAnnotationId)} style={buttonStyle(palette, !activeAnnotationId)} disabled={!activeAnnotationId}>
-                          Delete Highlight
-                        </button>
+                  <div className="pt-6 border-t border-border">
+                    <div className="flex justify-between items-end mb-4">
+                      <div>
+                        <h3 className="text-base font-semibold m-0 text-text">Screenshot</h3>
+                        <p className="text-sm text-muted m-0 mt-1">Annotate important areas visually</p>
+                      </div>
+                      <div className="flex gap-2">
+                        {selectedStep.thumbnailDataUrl && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setAnnotationMode((prev) => prev === "highlight" ? null : "highlight")}
+                              className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-colors border shadow-sm
+                                ${annotationMode === "highlight"
+                                  ? "bg-accent text-white border-accent" 
+                                  : "bg-surface-2 text-text border-border hover:border-muted"}`}
+                            >
+                              Highlight
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAnnotationMode((prev) => prev === "redact" ? null : "redact")}
+                              className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-colors border shadow-sm
+                                ${annotationMode === "redact"
+                                  ? "bg-accent text-white border-accent" 
+                                  : "bg-surface-2 text-text border-border hover:border-muted"}`}
+                            >
+                              Redact
+                            </button>
+                          </>
+                        )}
+                        {activeAnnotationId && (
+                          <button 
+                            type="button" 
+                            onClick={() => deleteAnnotation(selectedStep.id, activeAnnotationId)}
+                            className="px-3 py-1.5 rounded-lg font-medium text-sm bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20 transition-colors shadow-sm flex items-center gap-1.5"
+                          >
+                            <Trash2 size={14} />
+                            Remove
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    <div
-                      ref={screenshotRef}
-                      onMouseDown={onScreenshotMouseDown}
-                      style={{
-                        position: "relative",
-                        border: `1px solid ${palette.border}`,
-                        borderRadius: 8,
-                        overflow: "hidden",
-                        marginBottom: 10,
-                        cursor: annotationMode ? "crosshair" : "default",
-                        userSelect: "none"
-                      }}
-                    >
-                      <img src={selectedStep.thumbnailDataUrl} alt="Step screenshot" style={{ width: "100%", display: "block" }} />
-                      {(selectedStep.annotations ?? []).map((annotation) => (
-                        <button
-                          key={annotation.id}
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setActiveAnnotationId(annotation.id);
+                    {selectedStep.thumbnailDataUrl ? (
+                      <div className="relative">
+                        <AnnotationCanvas 
+                          imageUrl={selectedStep.thumbnailDataUrl}
+                          annotations={selectedStep.annotations ?? []}
+                          activeAnnotationId={activeAnnotationId}
+                          onAnnotationClick={(id, e) => {
+                            e.stopPropagation();
+                            setActiveAnnotationId(id);
                           }}
-                          style={{
-                            position: "absolute",
-                            left: `${annotation.x * 100}%`,
-                            top: `${annotation.y * 100}%`,
-                            width: `${annotation.width * 100}%`,
-                            height: `${annotation.height * 100}%`,
-                            border: `2px solid ${annotation.id === activeAnnotationId ? "#fbbf24" : palette.accent}`,
-                            background: "rgba(59, 130, 246, 0.15)",
-                            borderRadius: 4
-                          }}
-                          title={annotation.label || "Highlight"}
+                          draftAnnotation={draftAnnotation}
+                          onMouseDown={onScreenshotMouseDown}
+                          annotationMode={annotationMode}
+                          screenshotRef={screenshotRef}
                         />
-                      ))}
-                      {draftAnnotation ? (
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: `${draftAnnotation.x * 100}%`,
-                            top: `${draftAnnotation.y * 100}%`,
-                            width: `${draftAnnotation.width * 100}%`,
-                            height: `${draftAnnotation.height * 100}%`,
-                            border: `2px dashed ${palette.accent}`,
-                            background: "rgba(59, 130, 246, 0.12)",
-                            borderRadius: 4,
-                            pointerEvents: "none"
-                          }}
-                        />
-                      ) : null}
-                    </div>
 
-                    {activeAnnotation ? (
-                      <>
-                        <label htmlFor="highlight-label" style={{ display: "block", fontWeight: 600 }}>
-                          Highlight Label
-                        </label>
-                        <input
-                          id="highlight-label"
-                          value={activeAnnotation.label}
-                          onChange={(event) => upsertAnnotation(selectedStep.id, activeAnnotation.id, { label: event.target.value })}
-                          placeholder="e.g. Team Members tab"
-                          style={{ width: "100%", marginTop: 4, marginBottom: 10, padding: 8, borderRadius: 8, border: `1px solid ${palette.border}`, background: palette.surfaceAlt, color: palette.text }}
-                        />
-                      </>
+                        {activeAnnotation && activeAnnotation.type !== "redact" ? (
+                          <div className="mt-4 bg-surface-2 p-4 rounded-xl border border-border">
+                            <label htmlFor="highlight-label" className="text-sm font-semibold text-text block mb-1.5">
+                              Highlight Label
+                            </label>
+                            <input
+                              id="highlight-label"
+                              value={activeAnnotation.label || ""}
+                              onChange={(event) => upsertAnnotation(selectedStep.id, activeAnnotation.id, { label: event.target.value })}
+                              placeholder="e.g. Click the 'Save' button"
+                              className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted bg-surface-2 p-3 rounded-lg border border-border text-center">
+                            {annotationMode ? "Drag a rectangle on the image to draw." : "Click a tool above to add boxes, or select an existing one to edit."}
+                          </p>
+                        )}
+                      </div>
                     ) : (
-                      <p style={{ marginTop: 4, marginBottom: 10, color: palette.textSoft, fontSize: 14 }}>
-                        {annotationMode ? "Drag on the screenshot to draw a highlight." : "Enable drawing to add a new highlight box."}
-                      </p>
+                      <div className="bg-surface-2 p-8 rounded-xl border border-border text-center flex flex-col items-center justify-center text-muted gap-3">
+                        <MonitorSmartphone size={32} className="opacity-40" />
+                        <p className="m-0 text-sm">No screenshot available for this step.</p>
+                      </div>
                     )}
-                  </>
-                ) : (
-                  <p style={{ marginTop: 0, color: palette.textSoft, fontSize: 14 }}>
-                    This step has no screenshot thumbnail yet. Capture with thumbnails enabled to annotate visually.
-                  </p>
-                )}
-
-                <h3 style={{ marginBottom: 6 }}>Step Metadata</h3>
-                <pre
-                  style={{
-                    margin: 0,
-                    background: palette.surfaceAlt,
-                    border: `1px solid ${palette.border}`,
-                    color: palette.textSoft,
-                    padding: 10,
-                    borderRadius: 6,
-                    overflow: "auto",
-                    maxHeight: 260,
-                    whiteSpace: "pre-wrap",
-                    overflowWrap: "anywhere"
-                  }}
-                >
-                  {JSON.stringify(selectedStep, null, 2)}
-                </pre>
-              </>
-            )}
-          </article>
-        </section>
-      )}
+                  </div>
+                </div>
+              )}
+            </article>
+          </div>
+        )}
+      </div>
     </main>
   );
 }
