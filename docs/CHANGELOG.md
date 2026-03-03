@@ -18,3 +18,7 @@ All notable user-visible changes should be recorded here.
   - App now parses `source` and `sessionId` from URL query params.
   - App auto-loads/imports requested local/team session when available.
   - App now surfaces clear not-found messages for unresolved deep-linked session IDs.
+- Implemented `CMA-003` redaction contract consistency:
+  - Preserved annotation `type` (`highlight`/`redact`) in app normalization and migration/export helpers.
+  - Extended shared annotation contract type with explicit `type` field.
+  - Updated HTML export overlays so redactions render as opaque masks and summaries track redactions separately.

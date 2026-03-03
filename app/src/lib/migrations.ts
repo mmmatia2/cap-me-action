@@ -14,6 +14,10 @@ function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+function normalizeAnnotationType(value: unknown): "highlight" | "redact" {
+  return value === "redact" ? "redact" : "highlight";
+}
+
 function normalizeAnnotation(raw: unknown, idx: number) {
   if (!isObject(raw)) {
     return null;
@@ -39,7 +43,8 @@ function normalizeAnnotation(raw: unknown, idx: number) {
     y: clamp(raw.y),
     width,
     height,
-    label: asString(raw.label, "")
+    label: asString(raw.label, ""),
+    type: normalizeAnnotationType(raw.type)
   };
 }
 

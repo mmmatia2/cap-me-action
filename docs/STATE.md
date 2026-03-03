@@ -40,6 +40,8 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - React app supports session loading via content-script bridge when running on `localhost` without direct chrome API access.
   - React app now parses editor deep-link query params (`source`, `sessionId`) and auto-loads/imports requested local or team sessions when available.
   - React app now provides explicit not-found guidance when deep-linked session IDs cannot be resolved.
+  - Annotation `type` (`highlight`/`redact`) now survives app normalization and migration/export roundtrips.
+  - HTML export now renders redactions as opaque masks and reports redaction counts separately from highlights.
   - React app uses schema-aware migration helpers (`contracts.ts`, `migrations.ts`) for import/export compatibility.
   - React app supports a dual source model (`Local` extension + `Team` Apps Script endpoint scaffold) while keeping the existing local bridge path.
   - React app supports inline screenshot highlight boxes per step, with highlight labels persisted into JSON and included in Markdown/HTML exports.
@@ -88,4 +90,4 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 
 ## Next Micro-Task
 
-Implement redaction contract consistency so annotation `type` survives normalize/migrate/export and redactions render correctly in HTML exports.
+Implement extension sync settings UI in inspector for `syncConfig` (`enabled`, endpoint, auto-upload, masking, allow-list emails).

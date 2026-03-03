@@ -24,6 +24,10 @@ function clampUnit(value) {
   return Math.min(1, Math.max(0, num));
 }
 
+function normalizeAnnotationType(value) {
+  return value === "redact" ? "redact" : "highlight";
+}
+
 function sanitizeLabel(value) {
   const text = normalizeText(value);
   if (!text) {
@@ -271,7 +275,8 @@ function normalizeAnnotations(raw) {
         y: clampUnit(annotation.y),
         width,
         height,
-        label: normalizeText(annotation.label || "")
+        label: normalizeText(annotation.label || ""),
+        type: normalizeAnnotationType(annotation.type)
       };
     })
     .filter(Boolean);
@@ -315,9 +320,16 @@ function asMarkdown(payload) {
     }
     if (Array.isArray(step.annotations) && step.annotations.length) {
       const highlights = step.annotations
+        .filter((ann) => ann?.type !== "redact")
         .map((ann, idx) => ann.label || `Highlight ${idx + 1}`)
         .join(", ");
-      lines.push(`Highlights: ${highlights}`);
+      const redactionCount = step.annotations.filter((ann) => ann?.type === "redact").length;
+      if (highlights) {
+        lines.push(`Highlights: ${highlights}`);
+      }
+      if (redactionCount > 0) {
+        lines.push(`Redactions: ${redactionCount}`);
+      }
     }
     lines.push("");
     return lines;
@@ -351,19 +363,33 @@ function asHtml(payload) {
                     const y = Math.min(1, Math.max(0, Number(ann?.y) || 0));
                     const width = Math.min(1, Math.max(0.01, Number(ann?.width) || 0.01));
                     const height = Math.min(1, Math.max(0.01, Number(ann?.height) || 0.01));
-                    const label = escapeHtml(ann?.label || `Highlight ${idx + 1}`);
-                    return `<div class="shot-highlight" style="left:${(x * 100).toFixed(3)}%;top:${(y * 100).toFixed(3)}%;width:${(width * 100).toFixed(3)}%;height:${(height * 100).toFixed(3)}%;">
-                        <span class="shot-highlight-label">${label}</span>
+                    const annotationType = ann?.type === "redact" ? "redact" : "highlight";
+                    const label = escapeHtml(
+                      ann?.label || (annotationType === "redact" ? `Redaction ${idx + 1}` : `Highlight ${idx + 1}`)
+                    );
+                    const className =
+                      annotationType === "redact"
+                        ? "shot-highlight shot-redaction"
+                        : "shot-highlight";
+                    return `<div class="${className}" style="left:${(x * 100).toFixed(3)}%;top:${(y * 100).toFixed(3)}%;width:${(width * 100).toFixed(3)}%;height:${(height * 100).toFixed(3)}%;">
+                        ${annotationType === "redact" ? "" : `<span class="shot-highlight-label">${label}</span>`}
                       </div>`;
                   })
                   .join("")}
               </div>
             </figure>`
           : "";
-      const highlights =
-        Array.isArray(step.annotations) && step.annotations.length
-          ? `<p class="note"><strong>Highlights:</strong> ${escapeHtml(step.annotations.map((ann, idx) => ann.label || `Highlight ${idx + 1}`).join(", "))}</p>`
-          : "";
+      const annotationList = Array.isArray(step.annotations) ? step.annotations : [];
+      const highlightLabels = annotationList
+        .filter((ann) => ann?.type !== "redact")
+        .map((ann, idx) => ann.label || `Highlight ${idx + 1}`);
+      const redactionCount = annotationList.filter((ann) => ann?.type === "redact").length;
+      const highlights = highlightLabels.length
+        ? `<p class="note"><strong>Highlights:</strong> ${escapeHtml(highlightLabels.join(", "))}</p>`
+        : "";
+      const redactions = redactionCount
+        ? `<p class="note"><strong>Redactions:</strong> ${redactionCount}</p>`
+        : "";
       return `
         <section class="step">
           <h2>${step.stepIndex}. ${escapeHtml(step.title)}</h2>
@@ -372,6 +398,7 @@ function asHtml(payload) {
           ${note}
           ${url}
           ${highlights}
+          ${redactions}
         </section>`;
     })
     .join("\n");
@@ -394,6 +421,7 @@ function asHtml(payload) {
       .shot-frame { position: relative; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #fff; }
       .shot-frame img { display: block; width: 100%; height: auto; }
       .shot-highlight { position: absolute; border: 2px solid #2563eb; background: rgba(37, 99, 235, 0.16); box-sizing: border-box; }
+      .shot-redaction { border: none; background: rgba(15, 23, 42, 0.86); backdrop-filter: blur(2px); }
       .shot-highlight-label { position: absolute; left: 0; top: 0; transform: translateY(-100%); background: #2563eb; color: #fff; font-size: 11px; line-height: 1; padding: 4px 6px; border-radius: 6px 6px 6px 0; white-space: nowrap; }
     </style>
   </head>

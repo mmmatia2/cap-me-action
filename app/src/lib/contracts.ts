@@ -32,6 +32,7 @@ export type StepAnnotation = {
   width: number;
   height: number;
   label?: string;
+  type?: "highlight" | "redact";
 };
 
 export type StepRecord = {
