@@ -36,6 +36,14 @@ function setSyncConfigStatusText(text) {
   }
 }
 
+function setSyncAccountText(email) {
+  const el = document.getElementById("syncAccountText");
+  if (!el) {
+    return;
+  }
+  el.textContent = email ? `Account: ${email}` : "Account: not connected";
+}
+
 function normalizeSyncConfig(value) {
   const allowedRaw = Array.isArray(value?.allowedEmails) ? value.allowedEmails : [];
   return {
@@ -294,6 +302,7 @@ function refreshCaptureState() {
     const endpointReady = syncConfig.enabled && syncConfig.endpointUrl;
     setSyncStatusText(`Sync status: ${syncLabel}${endpointReady ? "" : " (endpoint disabled)"}`);
     renderSyncConfigForm(syncConfig);
+    setSyncAccountText(syncConfig.accountEmail ?? null);
     setCaptureBadge(Boolean(captureState.isCapturing));
     renderJson("session", selectedSession);
     renderStepPreview(sessionSteps);
@@ -543,6 +552,31 @@ function saveSyncConfig() {
   });
 }
 
+function signInForSync() {
+  chrome.runtime.sendMessage({ type: "AUTH_SIGN_IN" }, (response) => {
+    if (!response?.ok) {
+      setSyncConfigStatusText(`Sign in failed: ${response?.errorCode ?? "unknown error"}`);
+      return;
+    }
+    const email = response.accountEmail ?? null;
+    setSyncConfigStatusText(email ? `Signed in as ${email}.` : "Signed in.");
+    setSyncAccountText(email);
+    refreshCaptureState();
+  });
+}
+
+function signOutForSync() {
+  chrome.runtime.sendMessage({ type: "AUTH_SIGN_OUT" }, (response) => {
+    if (!response?.ok) {
+      setSyncConfigStatusText(`Sign out failed: ${response?.errorCode ?? "unknown error"}`);
+      return;
+    }
+    setSyncConfigStatusText("Signed out.");
+    setSyncAccountText(null);
+    refreshCaptureState();
+  });
+}
+
 document.getElementById("sessionSelect").addEventListener("change", (event) => {
   selectedSessionId = event.target.value || null;
   refreshCaptureState();
@@ -559,6 +593,8 @@ document.getElementById("discardLast").addEventListener("click", discardLastStep
 document.getElementById("clearSelected").addEventListener("click", clearSelectedSession);
 document.getElementById("resetAll").addEventListener("click", resetAllCaptureData);
 document.getElementById("saveSyncConfig").addEventListener("click", saveSyncConfig);
+document.getElementById("syncSignIn").addEventListener("click", signInForSync);
+document.getElementById("syncSignOut").addEventListener("click", signOutForSync);
 document.getElementById("syncEnabled").addEventListener("change", markSyncConfigDirty);
 document.getElementById("syncEndpointUrl").addEventListener("input", markSyncConfigDirty);
 document.getElementById("syncAutoUploadOnStop").addEventListener("change", markSyncConfigDirty);

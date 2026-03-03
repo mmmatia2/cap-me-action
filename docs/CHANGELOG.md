@@ -25,3 +25,7 @@ All notable user-visible changes should be recorded here.
 - Implemented `CMA-004` extension sync settings UI in inspector:
   - Added sync settings form for `enabled`, endpoint URL, auto-upload, masking, and allow-list emails.
   - Added validation and save-state feedback for sync settings persistence in `chrome.storage.local.syncConfig`.
+- Advanced `CMA-005` sync/auth setup readiness:
+  - Added inspector `Sign In` / `Sign Out` controls with connected account display.
+  - Added OAuth client ID helper script: `pnpm extension:set-oauth-client-id -- --client-id \"...apps.googleusercontent.com\"`.
+  - Expanded `docs/TEAM_SYNC_APPS_SCRIPT.md` into full step-by-step production runbook.

@@ -32,6 +32,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - Inspector can preview recent step thumbnails.
   - Inspector includes sync status/actions and editor handoff while preserving capture/export/reset controls.
   - Inspector now includes editable sync settings UI for `syncConfig` (`enabled`, endpoint URL, auto-upload on stop, mask input values, allowed emails) with validation and save feedback.
+  - Inspector now includes sync account `Sign In`/`Sign Out` controls via runtime auth messages and displays connected account email.
   - React app imports exported session JSON, supports per-step instruction/note editing, and exports edited JSON.
   - React app supports editable step titles, step reorder/delete controls, and Markdown export.
   - React app now supports "merge with next" in step list and stable drag-end reset handling.
@@ -80,6 +81,11 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 - Test and CI quality gates are not in place yet.
 - Sync/auth UX and production backend wiring are not fully complete.
 - Data retention limits (`20 sessions`, `500 steps`) can surprise users.
+
+## Operational Runbook
+
+- Team sync + OAuth setup and validation runbook: `docs/TEAM_SYNC_APPS_SCRIPT.md`
+- Manifest OAuth helper command: `pnpm extension:set-oauth-client-id -- --client-id \"<client-id>.apps.googleusercontent.com\"`
 
 ## Active Execution Plan
 
