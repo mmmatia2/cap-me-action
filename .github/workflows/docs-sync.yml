@@ -1,0 +1,22 @@
+name: Docs Sync
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  docs-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enforce docs sync
+        run: node scripts/check-doc-sync.mjs --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.sha }}"

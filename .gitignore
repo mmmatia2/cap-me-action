@@ -24,3 +24,6 @@ yarn-error.log*
 Thumbs.db
 .idea/
 .vscode/
+
+# Generated docs bundle
+docs/context-bundle.md

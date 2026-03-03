@@ -487,6 +487,18 @@ function buttonStyle(palette, disabled = false) {
   };
 }
 
+function parseEditorHandoffFromUrl() {
+  if (typeof window === "undefined") {
+    return { source: "local", sessionId: "" };
+  }
+
+  const params = new URLSearchParams(window.location.search || "");
+  const sourceRaw = normalizeText(params.get("source")).toLowerCase();
+  const source = sourceRaw === "team" ? "team" : "local";
+  const sessionId = normalizeText(params.get("sessionId"));
+  return { source, sessionId };
+}
+
 export default function App() {
   const [payload, setPayload] = useState(null);
   const [error, setError] = useState("");
@@ -506,7 +518,9 @@ export default function App() {
   const [annotationMode, setAnnotationMode] = useState(null);
   const [draftAnnotation, setDraftAnnotation] = useState(null);
   const [activeAnnotationId, setActiveAnnotationId] = useState("");
+  const [handoff] = useState(() => parseEditorHandoffFromUrl());
   const screenshotRef = useRef(null);
+  const handoffAttemptedRef = useRef(false);
   const palette = getPalette(theme);
   const hasExtensionStorage =
     typeof chrome !== "undefined" && Boolean(chrome.storage?.local) && Boolean(chrome.runtime?.id);
@@ -568,6 +582,50 @@ export default function App() {
       }
     });
   }, [hasExtensionStorage, teamApiBase]);
+
+  useEffect(() => {
+    const requestedSessionId = handoff.sessionId;
+    if (!requestedSessionId || handoffAttemptedRef.current) {
+      return;
+    }
+
+    if (handoff.source === "team" && !teamApiBase) {
+      setDataSource("team");
+      setTeamStatus(
+        `Deep link detected for team session ${requestedSessionId}. Configure endpoint URL to continue.`
+      );
+      return;
+    }
+
+    handoffAttemptedRef.current = true;
+
+    const run = async () => {
+      if (handoff.source === "team") {
+        setDataSource("team");
+        setTeamStatus(`Deep link detected. Loading team session ${requestedSessionId}...`);
+        const loaded = await loadFromTeamLibrary(requestedSessionId);
+        if (!loaded.ok) {
+          return;
+        }
+        await importTeamSessionById(requestedSessionId, {
+          notFoundMessage: `Requested team session ${requestedSessionId} was not found in team library.`
+        });
+        return;
+      }
+
+      setDataSource("local");
+      setExtensionStatus(`Deep link detected. Loading extension session ${requestedSessionId}...`);
+      const loaded = await loadFromExtensionStorage(requestedSessionId);
+      if (!loaded.ok) {
+        return;
+      }
+      importExtensionSessionById(requestedSessionId, loaded.sessions, loaded.steps, {
+        notFoundMessage: `Requested extension session ${requestedSessionId} was not found in extension storage.`
+      });
+    };
+
+    void run();
+  }, [handoff, teamApiBase]);
 
   function onFileSelected(event) {
     const file = event.target.files?.[0];
@@ -656,6 +714,48 @@ export default function App() {
     });
   }
 
+  function mergeStepWithNext(stepId) {
+    setPayload((prev) => {
+      if (!prev) {
+        return prev;
+      }
+
+      const index = prev.steps.findIndex((step) => step.id === stepId);
+      if (index < 0 || index >= prev.steps.length - 1) {
+        return prev;
+      }
+
+      const current = prev.steps[index];
+      const next = prev.steps[index + 1];
+      if (!current || !next) {
+        return prev;
+      }
+
+      const mergedInstruction = [normalizeText(current.instruction), normalizeText(next.instruction)]
+        .filter(Boolean)
+        .join(" ");
+      const mergedNote = [normalizeText(current.note), normalizeText(next.note)]
+        .filter(Boolean)
+        .join("\n");
+
+      const merged = {
+        ...current,
+        title: normalizeText(current.title) || normalizeText(next.title) || "Merged step",
+        instruction: mergedInstruction || normalizeText(current.instruction) || normalizeText(next.instruction),
+        note: mergedNote,
+        pageTitle: current.pageTitle || next.pageTitle || "",
+        url: current.url || next.url || "",
+        thumbnailDataUrl: current.thumbnailDataUrl || next.thumbnailDataUrl || null,
+        annotations: [...(current.annotations ?? []), ...(next.annotations ?? [])]
+      };
+
+      const steps = [...prev.steps];
+      steps.splice(index, 2, merged);
+      return { ...prev, steps: resequenceSteps(steps) };
+    });
+    setSelectedId(stepId);
+  }
+
   function upsertAnnotation(stepId, annotationId, patch) {
     patchStep(stepId, (step) => ({
       ...step,
@@ -703,17 +803,9 @@ export default function App() {
     setDragState({ dragId: "", overId: "", placement: "after" });
   }
 
-function patchStep(stepId, patchFn) {
-  setPayload((prev) => {
-    if (!prev) {
-      return prev;
-    }
-    return {
-      ...prev,
-      steps: patchStepById(prev.steps, stepId, patchFn)
-    };
-  });
-}
+  function onStepDragEnd() {
+    setDragState({ dragId: "", overId: "", placement: "after" });
+  }
 
   function buildRelativeRect(start, end) {
     const x = Math.min(start.x, end.x);
@@ -889,45 +981,65 @@ function patchStep(stepId, patchFn) {
     }
   }
 
-  function loadFromExtensionStorage() {
-    if (hasExtensionStorage) {
-      chrome.storage.local.get(["sessions", "steps"], (result) => {
-        const sessions = (result.sessions ?? []).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-        const steps = result.steps ?? [];
-        setExtensionSessions(sessions);
-        setExtensionSteps(steps);
-        setSelectedExtensionSessionId(sessions[0]?.id ?? "");
-        setExtensionStatus(sessions.length ? `Loaded ${sessions.length} session(s) from extension.` : "No sessions found in extension storage.");
-      });
-      return;
-    }
+  async function loadFromExtensionStorage(preferredSessionId = "") {
+    try {
+      let sessions = [];
+      let steps = [];
 
-    loadSessionsViaPageBridge().then((response) => {
-      if (!response.ok) {
-        setExtensionStatus("Extension bridge unavailable. Reload extension, refresh this page, then try again.");
-        return;
+      if (hasExtensionStorage) {
+        const result = await new Promise((resolve) =>
+          chrome.storage.local.get(["sessions", "steps"], resolve)
+        );
+        sessions = (result.sessions ?? []).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+        steps = result.steps ?? [];
+      } else {
+        const response = await loadSessionsViaPageBridge();
+        if (!response.ok) {
+          setExtensionStatus(
+            "Extension bridge unavailable. Reload extension, refresh this page, then try again."
+          );
+          return { ok: false, sessions: [], steps: [], error: response.error ?? "bridge_unavailable" };
+        }
+        sessions = [...response.sessions].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+        steps = response.steps ?? [];
       }
-      const sessions = [...response.sessions].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-      const steps = response.steps ?? [];
+
+      const preferred = String(preferredSessionId || "").trim();
+      const selected =
+        preferred && sessions.some((session) => session.id === preferred)
+          ? preferred
+          : sessions[0]?.id ?? "";
+
       setExtensionSessions(sessions);
       setExtensionSteps(steps);
-      setSelectedExtensionSessionId(sessions[0]?.id ?? "");
-      setExtensionStatus(sessions.length ? `Loaded ${sessions.length} session(s) from extension.` : "No sessions found in extension storage.");
-    });
+      setSelectedExtensionSessionId(selected);
+      setExtensionStatus(
+        sessions.length
+          ? `Loaded ${sessions.length} session(s) from extension.`
+          : "No sessions found in extension storage."
+      );
+      return { ok: true, sessions, steps, error: null };
+    } catch (err) {
+      setExtensionStatus(`Extension load failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      return { ok: false, sessions: [], steps: [], error: "extension_load_failed" };
+    }
   }
 
-  function importSelectedExtensionSession() {
-    if (!selectedExtensionSessionId) {
-      return;
-    }
-
-    const session = extensionSessions.find((x) => x.id === selectedExtensionSessionId);
+  function importExtensionSessionById(
+    sessionId,
+    sessions = extensionSessions,
+    stepsPool = extensionSteps,
+    options = {}
+  ) {
+    const session = sessions.find((x) => x.id === sessionId);
     if (!session) {
-      setExtensionStatus("Selected extension session was not found.");
-      return;
+      setExtensionStatus(
+        options.notFoundMessage || `Selected extension session ${sessionId} was not found.`
+      );
+      return false;
     }
 
-    const steps = extensionSteps
+    const steps = stepsPool
       .filter((x) => x.sessionId === session.id)
       .sort((a, b) => (a.stepIndex ?? 0) - (b.stepIndex ?? 0) || (a.at ?? 0) - (b.at ?? 0));
     const migrated = migrateSessionPayload({
@@ -946,6 +1058,15 @@ function patchStep(stepId, patchFn) {
     setSelectedId(normalized.steps[0]?.id || null);
     setError("");
     setExtensionStatus(`Imported session ${session.id} (${steps.length} steps).`);
+    setSelectedExtensionSessionId(session.id);
+    return true;
+  }
+
+  function importSelectedExtensionSession() {
+    if (!selectedExtensionSessionId) {
+      return;
+    }
+    importExtensionSessionById(selectedExtensionSessionId);
   }
 
   function buildTeamEndpoint(action, query = {}) {
@@ -963,7 +1084,7 @@ function patchStep(stepId, patchFn) {
     return url.toString();
   }
 
-  async function loadFromTeamLibrary() {
+  async function loadFromTeamLibrary(preferredSessionId = "") {
     try {
       setTeamStatus("Loading team sessions...");
       const response = await fetch(buildTeamEndpoint("listSessions", { limit: 50 }), {
@@ -976,22 +1097,29 @@ function patchStep(stepId, patchFn) {
       }
 
       const items = Array.isArray(body?.items) ? body.items : [];
+      const preferred = String(preferredSessionId || "").trim();
+      const selected =
+        preferred &&
+        items.some((session) => (session.sessionId || session.id) === preferred)
+          ? preferred
+          : items[0]?.sessionId ?? items[0]?.id ?? "";
       setTeamSessions(items);
-      setSelectedTeamSessionId(items[0]?.sessionId ?? items[0]?.id ?? "");
+      setSelectedTeamSessionId(selected);
       setTeamStatus(items.length ? `Loaded ${items.length} team session(s).` : "No team sessions found.");
+      return { ok: true, items, error: null };
     } catch (err) {
       setTeamStatus(`Team load failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      return { ok: false, items: [], error: err instanceof Error ? err.message : "unknown_error" };
     }
   }
 
-  async function importSelectedTeamSession() {
-    if (!selectedTeamSessionId) {
-      return;
+  async function importTeamSessionById(sessionId, options = {}) {
+    if (!sessionId) {
+      return false;
     }
-
     try {
       setTeamStatus("Importing team session...");
-      const response = await fetch(buildTeamEndpoint("getSession", { sessionId: selectedTeamSessionId }), {
+      const response = await fetch(buildTeamEndpoint("getSession", { sessionId }), {
         method: "GET",
         headers: teamAccessToken ? { Authorization: `Bearer ${teamAccessToken}` } : undefined
       });
@@ -1006,9 +1134,24 @@ function patchStep(stepId, patchFn) {
       setSelectedId(normalized.steps[0]?.id || null);
       setError("");
       setTeamStatus(`Imported team session ${normalized.session.id}.`);
+      setSelectedTeamSessionId(sessionId);
+      return true;
     } catch (err) {
-      setTeamStatus(`Team import failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      const message = err instanceof Error ? err.message : "unknown error";
+      if (message === "SESSION_NOT_FOUND") {
+        setTeamStatus(options.notFoundMessage || `Requested team session ${sessionId} was not found.`);
+      } else {
+        setTeamStatus(`Team import failed: ${message}`);
+      }
+      return false;
     }
+  }
+
+  async function importSelectedTeamSession() {
+    if (!selectedTeamSessionId) {
+      return;
+    }
+    await importTeamSessionById(selectedTeamSessionId);
   }
 
   return (
