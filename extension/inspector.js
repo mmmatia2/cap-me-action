@@ -1,7 +1,15 @@
 // Purpose: render persisted capture/sync state inside extension inspector UI.
 // Inputs: inspector button events + chrome.storage.local keys. Outputs: capture controls, session exports, and sync actions.
 const APP_SCHEMA_VERSION = "1.1.0";
+const DEFAULT_SYNC_CONFIG = {
+  enabled: false,
+  autoUploadOnStop: false,
+  endpointUrl: "",
+  allowedEmails: [],
+  maskInputValues: true
+};
 let selectedSessionId = null;
+let syncConfigDirty = false;
 
 function renderJson(elementId, value) {
   document.getElementById(elementId).textContent = value ? JSON.stringify(value, null, 2) : "None";
@@ -19,6 +27,87 @@ function setStatusText(text) {
 function setSyncStatusText(text) {
   const el = document.getElementById("syncStatus");
   el.textContent = text;
+}
+
+function setSyncConfigStatusText(text) {
+  const el = document.getElementById("syncConfigStatus");
+  if (el) {
+    el.textContent = text;
+  }
+}
+
+function normalizeSyncConfig(value) {
+  const allowedRaw = Array.isArray(value?.allowedEmails) ? value.allowedEmails : [];
+  return {
+    ...DEFAULT_SYNC_CONFIG,
+    ...(value ?? {}),
+    endpointUrl: String(value?.endpointUrl ?? DEFAULT_SYNC_CONFIG.endpointUrl).trim(),
+    allowedEmails: allowedRaw.map((x) => String(x).trim().toLowerCase()).filter(Boolean),
+    enabled: Boolean(value?.enabled),
+    autoUploadOnStop: Boolean(value?.autoUploadOnStop),
+    maskInputValues:
+      typeof value?.maskInputValues === "boolean"
+        ? value.maskInputValues
+        : DEFAULT_SYNC_CONFIG.maskInputValues
+  };
+}
+
+function parseAllowedEmails(value) {
+  return String(value ?? "")
+    .split(",")
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function renderSyncConfigForm(syncConfig) {
+  if (syncConfigDirty) {
+    return;
+  }
+
+  const normalized = normalizeSyncConfig(syncConfig);
+  document.getElementById("syncEnabled").checked = Boolean(normalized.enabled);
+  document.getElementById("syncEndpointUrl").value = normalized.endpointUrl;
+  document.getElementById("syncAutoUploadOnStop").checked = Boolean(normalized.autoUploadOnStop);
+  document.getElementById("syncMaskInputValues").checked = Boolean(normalized.maskInputValues);
+  document.getElementById("syncAllowedEmails").value = normalized.allowedEmails.join(", ");
+}
+
+function readSyncConfigForm() {
+  return {
+    enabled: Boolean(document.getElementById("syncEnabled").checked),
+    endpointUrl: String(document.getElementById("syncEndpointUrl").value || "").trim(),
+    autoUploadOnStop: Boolean(document.getElementById("syncAutoUploadOnStop").checked),
+    maskInputValues: Boolean(document.getElementById("syncMaskInputValues").checked),
+    allowedEmails: parseAllowedEmails(document.getElementById("syncAllowedEmails").value)
+  };
+}
+
+function validateSyncConfig(syncConfig) {
+  if (!syncConfig.enabled) {
+    return null;
+  }
+
+  if (!syncConfig.endpointUrl) {
+    return "Sync endpoint URL is required when sync is enabled.";
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(syncConfig.endpointUrl);
+  } catch {
+    return "Sync endpoint URL is invalid.";
+  }
+
+  if (parsed.protocol !== "https:") {
+    return "Sync endpoint URL must use https.";
+  }
+
+  const invalidEmail = syncConfig.allowedEmails.find((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+  if (invalidEmail) {
+    return `Invalid allowed email: ${invalidEmail}`;
+  }
+
+  return null;
 }
 
 function setCaptureBadge(isCapturing) {
@@ -184,7 +273,7 @@ function refreshCaptureState() {
     const captureState = result.captureState ?? { isCapturing: false, startedAt: null };
     const sessions = result.sessions ?? [];
     const allSteps = result.steps ?? [];
-    const syncConfig = result.syncConfig ?? {};
+    const syncConfig = normalizeSyncConfig(result.syncConfig);
     const fallback = getLatestSession(sessions);
     selectedSessionId = renderSessionOptions(sessions, selectedSessionId ?? fallback?.id ?? null);
     const selectedSession = selectedSessionId
@@ -204,6 +293,7 @@ function refreshCaptureState() {
     const syncLabel = selectedSession?.sync?.status ?? "local";
     const endpointReady = syncConfig.enabled && syncConfig.endpointUrl;
     setSyncStatusText(`Sync status: ${syncLabel}${endpointReady ? "" : " (endpoint disabled)"}`);
+    renderSyncConfigForm(syncConfig);
     setCaptureBadge(Boolean(captureState.isCapturing));
     renderJson("session", selectedSession);
     renderStepPreview(sessionSteps);
@@ -420,6 +510,39 @@ function openSelectedInEditor() {
   );
 }
 
+function markSyncConfigDirty() {
+  syncConfigDirty = true;
+  setSyncConfigStatusText("Unsaved sync settings.");
+}
+
+function saveSyncConfig() {
+  const draft = readSyncConfigForm();
+  const validationError = validateSyncConfig(draft);
+  if (validationError) {
+    setSyncConfigStatusText(validationError);
+    return;
+  }
+
+  chrome.storage.local.get(["syncConfig"], (result) => {
+    const current = normalizeSyncConfig(result.syncConfig);
+    const next = {
+      ...current,
+      ...draft,
+      allowedEmails: draft.allowedEmails
+    };
+
+    chrome.storage.local.set({ syncConfig: next }, () => {
+      if (chrome.runtime.lastError) {
+        setSyncConfigStatusText(`Failed to save sync settings: ${chrome.runtime.lastError.message}`);
+        return;
+      }
+      syncConfigDirty = false;
+      setSyncConfigStatusText("Sync settings saved.");
+      refreshCaptureState();
+    });
+  });
+}
+
 document.getElementById("sessionSelect").addEventListener("change", (event) => {
   selectedSessionId = event.target.value || null;
   refreshCaptureState();
@@ -435,4 +558,10 @@ document.getElementById("copyStepsOnly").addEventListener("click", copyStepsOnly
 document.getElementById("discardLast").addEventListener("click", discardLastStep);
 document.getElementById("clearSelected").addEventListener("click", clearSelectedSession);
 document.getElementById("resetAll").addEventListener("click", resetAllCaptureData);
+document.getElementById("saveSyncConfig").addEventListener("click", saveSyncConfig);
+document.getElementById("syncEnabled").addEventListener("change", markSyncConfigDirty);
+document.getElementById("syncEndpointUrl").addEventListener("input", markSyncConfigDirty);
+document.getElementById("syncAutoUploadOnStop").addEventListener("change", markSyncConfigDirty);
+document.getElementById("syncMaskInputValues").addEventListener("change", markSyncConfigDirty);
+document.getElementById("syncAllowedEmails").addEventListener("input", markSyncConfigDirty);
 refreshCaptureState();

@@ -31,6 +31,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - Service worker includes MV3-safe sync queue scaffolding with `chrome.alarms` retries and runtime sync commands (`SYNC_SESSION_BY_ID`, `SYNC_LAST_SESSION`, `GET_SYNC_STATUS`).
   - Inspector can preview recent step thumbnails.
   - Inspector includes sync status/actions and editor handoff while preserving capture/export/reset controls.
+  - Inspector now includes editable sync settings UI for `syncConfig` (`enabled`, endpoint URL, auto-upload on stop, mask input values, allowed emails) with validation and save feedback.
   - React app imports exported session JSON, supports per-step instruction/note editing, and exports edited JSON.
   - React app supports editable step titles, step reorder/delete controls, and Markdown export.
   - React app now supports "merge with next" in step list and stable drag-end reset handling.
@@ -90,4 +91,4 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 
 ## Next Micro-Task
 
-Implement extension sync settings UI in inspector for `syncConfig` (`enabled`, endpoint, auto-upload, masking, allow-list emails).
+Validate OAuth + Apps Script production sync flow end-to-end with real users and real Drive folder, then document setup/troubleshooting.

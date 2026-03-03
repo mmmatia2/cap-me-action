@@ -10,6 +10,8 @@
       h1 { font-size: 16px; margin: 0 0 8px; }
       h2 { font-size: 13px; margin: 12px 0 6px; }
       button { margin-bottom: 8px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; }
+      input[type="text"], textarea, select { width: 100%; margin: 4px 0 8px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 8px; font: inherit; }
+      textarea { min-height: 56px; resize: vertical; }
       pre { background: var(--surface); border: 1px solid var(--border); padding: 8px; border-radius: 6px; max-height: 220px; overflow: auto; color: var(--muted); }
       .capture-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 8px; }
       .capture-badge.capturing { background: #d9fbe3; color: #126b2e; }
@@ -19,8 +21,12 @@
       .thumb-item img { width: 100%; display: block; }
       .thumb-item figcaption { font-size: 10px; padding: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .panel { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px; background: var(--surface-2); margin-bottom: 10px; }
+      .toggle-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; color: var(--muted); }
+      .toggle-row input { margin: 0; width: auto; }
+      .hint { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
       .danger button { color: #fecaca; border-color: #7f1d1d; background: #2a1114; }
       #syncStatus { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+      #syncConfigStatus { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
     </style>
   </head>
   <body>
@@ -35,6 +41,28 @@
       <button id="refresh" type="button">Refresh Capture State</button>
       <button id="syncSelected" type="button">Sync Selected Session</button>
       <button id="openEditor" type="button">Open Selected In Editor</button>
+    </div>
+    <div class="panel">
+      <h2>Sync Settings</h2>
+      <p id="syncConfigStatus">Load and edit sync configuration.</p>
+      <label class="toggle-row" for="syncEnabled">
+        <input id="syncEnabled" type="checkbox" />
+        Enable team sync
+      </label>
+      <label for="syncEndpointUrl">Endpoint URL</label>
+      <input id="syncEndpointUrl" type="text" placeholder="https://script.google.com/macros/s/.../exec" />
+      <label class="toggle-row" for="syncAutoUploadOnStop">
+        <input id="syncAutoUploadOnStop" type="checkbox" />
+        Auto upload when capture stops
+      </label>
+      <label class="toggle-row" for="syncMaskInputValues">
+        <input id="syncMaskInputValues" type="checkbox" />
+        Mask input values in sync payloads
+      </label>
+      <label for="syncAllowedEmails">Allowed emails (comma separated)</label>
+      <textarea id="syncAllowedEmails" placeholder="alice@company.com, bob@company.com"></textarea>
+      <p class="hint">If sync is enabled, endpoint URL is required.</p>
+      <button id="saveSyncConfig" type="button">Save Sync Settings</button>
     </div>
     <div class="panel">
       <button id="exportJson" type="button">Export Selected Session JSON</button>

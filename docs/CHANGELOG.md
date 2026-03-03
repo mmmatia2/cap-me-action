@@ -22,3 +22,6 @@ All notable user-visible changes should be recorded here.
   - Preserved annotation `type` (`highlight`/`redact`) in app normalization and migration/export helpers.
   - Extended shared annotation contract type with explicit `type` field.
   - Updated HTML export overlays so redactions render as opaque masks and summaries track redactions separately.
+- Implemented `CMA-004` extension sync settings UI in inspector:
+  - Added sync settings form for `enabled`, endpoint URL, auto-upload, masking, and allow-list emails.
+  - Added validation and save-state feedback for sync settings persistence in `chrome.storage.local.syncConfig`.
