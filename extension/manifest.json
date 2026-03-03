@@ -18,7 +18,7 @@
     "https://www.googleapis.com/*"
   ],
   "oauth2": {
-    "client_id": "REPLACE_WITH_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "client_id": "1053235519312-9q831sanfssrhnou9kfo5i0030hmkqok.apps.googleusercontent.com",
     "scopes": [
       "openid",
       "email",
@@ -34,14 +34,23 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["ui-floating-control/index.html", "ui-floating-control/dock.js"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "ui-floating-control/index.html",
+        "ui-floating-control/dock.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content-script.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-script.js"
+      ],
       "run_at": "document_idle"
     }
   ]
