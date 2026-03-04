@@ -41,12 +41,19 @@ Example:
 1. Click `Deploy -> New deployment`.
 2. Type: `Web app`.
 3. Execute as: `Me`.
-4. Access: `Anyone`.
+4. Access: `Anyone` (not `Anyone with Google account`).
 5. Deploy and copy the generated web app URL.
 
 This URL is your `syncConfig.endpointUrl`.
 
 Why this setup: extension/background fetches are API calls (not interactive browser pages), so cookie/session auth is unreliable. The script below validates Google access tokens from request payload/query and applies `CAPME_ALLOWED_EMAILS` server-side.
+
+Quick verification after deploy:
+
+1. Open the web app URL in an incognito window (logged out is fine) with:
+   - `.../exec?action=listSessions&limit=1&accessToken=invalid`
+2. Expected: JSON response (`AUTH_REQUIRED`/`AUTH_DENIED`/`ok`) from your script.
+3. If you get redirected to Google login, deployment access is still not `Anyone`.
 
 ## Step 5: Get Chrome Extension ID
 
@@ -137,6 +144,10 @@ Pass criteria:
   - Usually means old deployment/auth mode mismatch.
   - Confirm script code includes `getAccessToken` + `assertAllowedUser(e, body)` from this doc.
   - Redeploy as Web App after saving code changes, then update inspector endpoint if URL changed.
+- `HTTP_404` on sync upload:
+  - Check `chrome.storage.local.get(["syncState"], console.log)` and inspect `syncState.lastErrorDetail`.
+  - Verify `request=...action=uploadSession` and `response=...` values point to your active `/exec` deployment.
+  - If response points to a Google login or generic HTML page, deployment access is not fully public (`Anyone`) or endpoint URL is stale.
 - `SYNC_ENDPOINT_MISSING`:
   - Save sync settings with endpoint URL.
 - `SESSION_NOT_FOUND`:

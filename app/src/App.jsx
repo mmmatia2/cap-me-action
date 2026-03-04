@@ -1119,8 +1119,7 @@ export default function App() {
     try {
       setTeamStatus("Loading team sessions...");
       const response = await fetch(buildTeamEndpoint("listSessions", { limit: 50 }), {
-        method: "GET",
-        headers: teamAccessToken ? { Authorization: `Bearer ${teamAccessToken}` } : undefined
+        method: "GET"
       });
       const body = await response.json();
       if (!response.ok || body?.ok === false) {
@@ -1151,8 +1150,7 @@ export default function App() {
     try {
       setTeamStatus("Importing team session...");
       const response = await fetch(buildTeamEndpoint("getSession", { sessionId }), {
-        method: "GET",
-        headers: teamAccessToken ? { Authorization: `Bearer ${teamAccessToken}` } : undefined
+        method: "GET"
       });
       const body = await response.json();
       if (!response.ok || body?.ok === false) {

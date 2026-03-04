@@ -329,12 +329,13 @@ async function uploadSessionToEndpoint(syncConfig, session, steps) {
   );
 
   let response;
+  let requestUrl = "";
   try {
     const endpoint = `${syncConfig.endpointUrl}${syncConfig.endpointUrl.includes("?") ? "&" : "?"}action=uploadSession`;
+    requestUrl = endpoint;
     response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${tokenResult.token}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -344,8 +345,13 @@ async function uploadSessionToEndpoint(syncConfig, session, steps) {
         client: { name: "cap-me-action-extension", version: chrome.runtime.getManifest().version }
       })
     });
-  } catch {
-    return { ok: false, errorCode: "NETWORK_ERROR" };
+  } catch (error) {
+    return {
+      ok: false,
+      errorCode: "NETWORK_ERROR",
+      detail: String(error?.message || "request_failed"),
+      requestUrl
+    };
   }
 
   if (response.status === 401) {
@@ -369,10 +375,15 @@ async function uploadSessionToEndpoint(syncConfig, session, steps) {
   }
 
   if (!response.ok || body?.ok === false) {
+    const responseUrl = String(response.url || "");
+    const snippet = rawText ? rawText.slice(0, 240) : "";
     return {
       ok: false,
       errorCode: String(body?.errorCode ?? body?.error ?? `HTTP_${response.status}`),
-      detail: rawText ? rawText.slice(0, 240) : null
+      detail: `status=${response.status}; request=${requestUrl}; response=${responseUrl}; body=${snippet}`,
+      requestUrl,
+      responseUrl,
+      httpStatus: response.status
     };
   }
 
