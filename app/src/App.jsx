@@ -1164,17 +1164,15 @@ export default function App() {
 
   async function ensureTeamAccessToken() {
     const current = normalizeText(teamAccessToken);
-    if (current) {
-      return current;
-    }
-
     const bridged = await loadTeamAuthViaPageBridge(1600);
     const token = normalizeText(bridged?.token || "");
     if (bridged?.ok && token) {
-      setTeamAccessToken(token);
+      if (token !== current) {
+        setTeamAccessToken(token);
+      }
       return token;
     }
-    return "";
+    return current;
   }
 
   async function loadFromTeamLibrary(preferredSessionId = "") {
