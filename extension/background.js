@@ -772,6 +772,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
 
+    if (message.type === "GET_SYNC_ACCESS_TOKEN") {
+      const tokenResult = await getAuthToken(false);
+      if (!tokenResult.ok) {
+        sendResponse(tokenResult);
+        return;
+      }
+      sendResponse({ ok: true, token: tokenResult.token });
+      return;
+    }
+
     if (message.type === "OPEN_EDITOR") {
       const sessionId = String(
         message.payload?.sessionId ??

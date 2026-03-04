@@ -646,51 +646,80 @@ window.addEventListener("message", (event) => {
   if (!data || data.channel !== "CAP_ME_APP_BRIDGE") {
     return;
   }
-  if (data.type !== "REQUEST_SESSIONS") {
-    return;
-  }
 
-  if (!hasStorageApi()) {
-    window.postMessage(
-      {
-        channel: "CAP_ME_APP_BRIDGE",
-        type: "SESSIONS_RESPONSE",
-        requestId: data.requestId,
-        ok: false,
-        error: "storage_unavailable"
-      },
-      "*"
-    );
-    return;
-  }
-
-  try {
-    chrome.storage.local.get(["sessions", "steps"], (result) => {
-      const payload = result ?? {};
+  if (data.type === "REQUEST_SESSIONS") {
+    if (!hasStorageApi()) {
       window.postMessage(
         {
           channel: "CAP_ME_APP_BRIDGE",
           type: "SESSIONS_RESPONSE",
           requestId: data.requestId,
-          ok: true,
-          sessions: payload.sessions ?? [],
-          steps: payload.steps ?? []
+          ok: false,
+          error: "storage_unavailable"
+        },
+        "*"
+      );
+      return;
+    }
+
+    try {
+      chrome.storage.local.get(["sessions", "steps"], (result) => {
+        const payload = result ?? {};
+        window.postMessage(
+          {
+            channel: "CAP_ME_APP_BRIDGE",
+            type: "SESSIONS_RESPONSE",
+            requestId: data.requestId,
+            ok: true,
+            sessions: payload.sessions ?? [],
+            steps: payload.steps ?? []
+          },
+          "*"
+        );
+      });
+    } catch {
+      window.postMessage(
+        {
+          channel: "CAP_ME_APP_BRIDGE",
+          type: "SESSIONS_RESPONSE",
+          requestId: data.requestId,
+          ok: false,
+          error: "storage_read_failed"
+        },
+        "*"
+      );
+    }
+    return;
+  }
+
+  if (data.type === "REQUEST_TEAM_AUTH") {
+    sendRuntimeMessage({ type: "GET_SYNC_ACCESS_TOKEN" }).then((result) => {
+      const ok = Boolean(result?.ok && result?.token);
+      window.postMessage(
+        {
+          channel: "CAP_ME_APP_BRIDGE",
+          type: "TEAM_AUTH_RESPONSE",
+          requestId: data.requestId,
+          ok,
+          token: ok ? String(result.token) : null,
+          error: ok ? null : String(result?.errorCode || result?.error || "token_unavailable")
         },
         "*"
       );
     });
-  } catch {
-    window.postMessage(
-      {
-        channel: "CAP_ME_APP_BRIDGE",
-        type: "SESSIONS_RESPONSE",
-        requestId: data.requestId,
-        ok: false,
-        error: "storage_read_failed"
-      },
-      "*"
-    );
+    return;
   }
+
+  window.postMessage(
+    {
+      channel: "CAP_ME_APP_BRIDGE",
+      type: "SESSIONS_RESPONSE",
+      requestId: data.requestId,
+      ok: false,
+      error: "unsupported_bridge_request"
+    },
+    "*"
+  );
 });
 
 if (chrome?.storage?.onChanged?.addListener) {

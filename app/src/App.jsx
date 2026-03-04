@@ -515,6 +515,52 @@ function buttonStyle(palette, disabled = false) {
   };
 }
 
+function loadTeamAuthViaPageBridge(timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    const requestId = `cap_me_team_auth_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    let settled = false;
+
+    const cleanup = () => {
+      window.removeEventListener("message", onMessage);
+      clearTimeout(timer);
+    };
+
+    const finish = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+
+    const onMessage = (event) => {
+      if (event.source !== window) {
+        return;
+      }
+      const data = event.data;
+      if (!data || data.channel !== "CAP_ME_APP_BRIDGE" || data.type !== "TEAM_AUTH_RESPONSE") {
+        return;
+      }
+      if (data.requestId !== requestId) {
+        return;
+      }
+      finish({
+        ok: Boolean(data.ok),
+        token: data.token ? String(data.token) : "",
+        error: data.error ? String(data.error) : null
+      });
+    };
+
+    const timer = setTimeout(() => {
+      finish({ ok: false, token: "", error: "bridge_timeout" });
+    }, timeoutMs);
+
+    window.addEventListener("message", onMessage);
+    window.postMessage({ channel: "CAP_ME_APP_BRIDGE", type: "REQUEST_TEAM_AUTH", requestId }, "*");
+  });
+}
+
 function parseEditorHandoffFromUrl() {
   if (typeof window === "undefined") {
     return { source: "local", sessionId: "" };
@@ -1097,15 +1143,16 @@ export default function App() {
     importExtensionSessionById(selectedExtensionSessionId);
   }
 
-  function buildTeamEndpoint(action, query = {}) {
+  function buildTeamEndpoint(action, query = {}, accessTokenOverride = "") {
     const base = String(teamApiBase || "").trim();
     if (!base) {
       throw new Error("Team API endpoint is required.");
     }
     const url = new URL(base);
     url.searchParams.set("action", action);
-    if (teamAccessToken) {
-      url.searchParams.set("accessToken", teamAccessToken);
+    const token = normalizeText(accessTokenOverride || teamAccessToken);
+    if (token) {
+      url.searchParams.set("accessToken", token);
     }
     Object.entries(query).forEach(([key, value]) => {
       if (value !== undefined && value !== null && String(value) !== "") {
@@ -1115,10 +1162,26 @@ export default function App() {
     return url.toString();
   }
 
+  async function ensureTeamAccessToken() {
+    const current = normalizeText(teamAccessToken);
+    if (current) {
+      return current;
+    }
+
+    const bridged = await loadTeamAuthViaPageBridge(1600);
+    const token = normalizeText(bridged?.token || "");
+    if (bridged?.ok && token) {
+      setTeamAccessToken(token);
+      return token;
+    }
+    return "";
+  }
+
   async function loadFromTeamLibrary(preferredSessionId = "") {
     try {
       setTeamStatus("Loading team sessions...");
-      const response = await fetch(buildTeamEndpoint("listSessions", { limit: 50 }), {
+      const accessToken = await ensureTeamAccessToken();
+      const response = await fetch(buildTeamEndpoint("listSessions", { limit: 50 }, accessToken), {
         method: "GET"
       });
       const body = await response.json();
@@ -1149,7 +1212,8 @@ export default function App() {
     }
     try {
       setTeamStatus("Importing team session...");
-      const response = await fetch(buildTeamEndpoint("getSession", { sessionId }), {
+      const accessToken = await ensureTeamAccessToken();
+      const response = await fetch(buildTeamEndpoint("getSession", { sessionId }, accessToken), {
         method: "GET"
       });
       const body = await response.json();
