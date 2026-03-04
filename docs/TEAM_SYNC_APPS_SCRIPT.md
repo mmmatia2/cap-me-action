@@ -140,6 +140,9 @@ Pass criteria:
   - Reload extension after manifest update.
 - `AUTH_DENIED`:
   - Check allowed/test users in OAuth consent and `CAPME_ALLOWED_EMAILS`.
+  - Verify token email with:
+    - `https://oauth2.googleapis.com/tokeninfo?access_token=<TOKEN>`
+  - Ensure `resolveUserEmail(e, body)` checks token email before `Session.getActiveUser()`.
 - `HTTP_302` or generic `UPLOAD_FAILED`:
   - Usually means old deployment/auth mode mismatch.
   - Confirm script code includes `getAccessToken` + `assertAllowedUser(e, body)` from this doc.
@@ -218,10 +221,12 @@ function getEmailFromAccessToken(accessToken) {
 }
 
 function resolveUserEmail(e, body) {
+  const accessToken = getAccessToken(e, body);
+  const tokenEmail = getEmailFromAccessToken(accessToken);
+  if (tokenEmail) return tokenEmail;
   const sessionEmail = getEmailFromGoogleSession();
   if (sessionEmail) return sessionEmail;
-  const accessToken = getAccessToken(e, body);
-  return getEmailFromAccessToken(accessToken);
+  return null;
 }
 
 function assertAllowedUser(e, body) {
