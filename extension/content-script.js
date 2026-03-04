@@ -692,7 +692,13 @@ window.addEventListener("message", (event) => {
     return;
   }
 
-  if (data.type === "REQUEST_TEAM_AUTH") {
+  const isTeamAuthRequest =
+    data.type === "REQUEST_TEAM_AUTH" ||
+    data.type === "REQUEST_TEAM_TOKEN" ||
+    data.type === "REQUEST_AUTH_TOKEN" ||
+    (typeof data.requestId === "string" && data.requestId.startsWith("cap_me_team_auth_"));
+
+  if (isTeamAuthRequest) {
     sendRuntimeMessage({ type: "GET_SYNC_ACCESS_TOKEN" }).then((result) => {
       const ok = Boolean(result?.ok && result?.token);
       window.postMessage(
