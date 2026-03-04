@@ -1104,6 +1104,9 @@ export default function App() {
     }
     const url = new URL(base);
     url.searchParams.set("action", action);
+    if (teamAccessToken) {
+      url.searchParams.set("accessToken", teamAccessToken);
+    }
     Object.entries(query).forEach(([key, value]) => {
       if (value !== undefined && value !== null && String(value) !== "") {
         url.searchParams.set(key, String(value));

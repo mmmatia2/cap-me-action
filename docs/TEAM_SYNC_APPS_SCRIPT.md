@@ -40,11 +40,13 @@ Example:
 
 1. Click `Deploy -> New deployment`.
 2. Type: `Web app`.
-3. Execute as: `User accessing the web app`.
-4. Access: `Only users in your domain` or restricted users.
+3. Execute as: `Me`.
+4. Access: `Anyone`.
 5. Deploy and copy the generated web app URL.
 
 This URL is your `syncConfig.endpointUrl`.
+
+Why this setup: extension/background fetches are API calls (not interactive browser pages), so cookie/session auth is unreliable. The script below validates Google access tokens from request payload/query and applies `CAPME_ALLOWED_EMAILS` server-side.
 
 ## Step 5: Get Chrome Extension ID
 
@@ -131,6 +133,10 @@ Pass criteria:
   - Reload extension after manifest update.
 - `AUTH_DENIED`:
   - Check allowed/test users in OAuth consent and `CAPME_ALLOWED_EMAILS`.
+- `HTTP_302` or generic `UPLOAD_FAILED`:
+  - Usually means old deployment/auth mode mismatch.
+  - Confirm script code includes `getAccessToken` + `assertAllowedUser(e, body)` from this doc.
+  - Redeploy as Web App after saving code changes, then update inspector endpoint if URL changed.
 - `SYNC_ENDPOINT_MISSING`:
   - Save sync settings with endpoint URL.
 - `SESSION_NOT_FOUND`:
@@ -148,10 +154,18 @@ Pass criteria:
 ## Minimal Apps Script server template
 
 ```javascript
-function jsonResponse(payload, status) {
+function jsonResponse(payload) {
   const output = ContentService.createTextOutput(JSON.stringify(payload));
   output.setMimeType(ContentService.MimeType.JSON);
   return output;
+}
+
+function parseBody(e) {
+  try {
+    return JSON.parse((e && e.postData && e.postData.contents) || "{}");
+  } catch (error) {
+    throw new Error("INVALID_JSON_BODY");
+  }
 }
 
 function getAllowedEmails() {
@@ -159,25 +173,67 @@ function getAllowedEmails() {
   return raw.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
 }
 
-function assertAllowedUser() {
-  const email = Session.getActiveUser().getEmail().toLowerCase();
-  const allow = getAllowedEmails();
-  if (allow.length > 0 && !allow.includes(email)) {
-    throw new Error("AUTH_DENIED");
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getAccessToken(e, body) {
+  const fromBody = String((body && body.accessToken) || "").trim();
+  if (fromBody) return fromBody;
+  return String((e && e.parameter && e.parameter.accessToken) || "").trim();
+}
+
+function getEmailFromGoogleSession() {
+  try {
+    return normalizeEmail(Session.getActiveUser().getEmail()) || null;
+  } catch (error) {
+    return null;
   }
+}
+
+function getEmailFromAccessToken(accessToken) {
+  if (!accessToken) return null;
+  try {
+    const url =
+      "https://oauth2.googleapis.com/tokeninfo?access_token=" +
+      encodeURIComponent(accessToken);
+    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (response.getResponseCode() !== 200) return null;
+    const payload = JSON.parse(response.getContentText() || "{}");
+    return normalizeEmail(payload.email) || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function resolveUserEmail(e, body) {
+  const sessionEmail = getEmailFromGoogleSession();
+  if (sessionEmail) return sessionEmail;
+  const accessToken = getAccessToken(e, body);
+  return getEmailFromAccessToken(accessToken);
+}
+
+function assertAllowedUser(e, body) {
+  const email = resolveUserEmail(e, body);
+  if (!email) {
+    throw new Error("AUTH_REQUIRED");
+  }
+  const allow = getAllowedEmails();
+  if (allow.length > 0 && !allow.includes(email)) throw new Error("AUTH_DENIED");
   return email;
 }
 
 function getFolder() {
-  const folderId = PropertiesService.getScriptProperties().getProperty("CAPME_FOLDER_ID");
+  const raw = PropertiesService.getScriptProperties().getProperty("CAPME_FOLDER_ID") || "";
+  const folderId = String(raw).split("?")[0].trim();
   if (!folderId) throw new Error("FOLDER_NOT_CONFIGURED");
   return DriveApp.getFolderById(folderId);
 }
 
 function doGet(e) {
   try {
-    assertAllowedUser();
-    const action = e.parameter.action;
+    assertAllowedUser(e, null);
+    const action = (e.parameter && e.parameter.action) || "";
     if (action === "listSessions") return listSessions(e);
     if (action === "getSession") return getSession(e);
     return jsonResponse({ ok: false, errorCode: "UNKNOWN_ACTION" });
@@ -188,9 +244,9 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    const email = assertAllowedUser();
-    const action = e.parameter.action;
-    const body = JSON.parse(e.postData.contents || "{}");
+    const body = parseBody(e);
+    const email = assertAllowedUser(e, body);
+    const action = (e.parameter && e.parameter.action) || "";
     if (action === "uploadSession") return uploadSession(body, email);
     if (action === "deleteSession") return deleteSession(body);
     return jsonResponse({ ok: false, errorCode: "UNKNOWN_ACTION" });
@@ -225,8 +281,13 @@ function listSessions(e) {
   while (files.hasNext()) {
     const file = files.next();
     if (!file.getName().endsWith(".json")) continue;
-    const content = file.getBlob().getDataAsString();
-    const payload = JSON.parse(content || "{}");
+    let payload = {};
+    try {
+      const content = file.getBlob().getDataAsString();
+      payload = JSON.parse(content || "{}");
+    } catch (error) {
+      continue;
+    }
     const session = payload.session || {};
     items.push({
       id: session.id || file.getName().replace(".json", ""),
@@ -237,22 +298,23 @@ function listSessions(e) {
     });
   }
   items.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  return jsonResponse({ ok: true, items: items.slice(0, Number(e.parameter.limit || 50)) });
+  const limit = Number((e.parameter && e.parameter.limit) || 50);
+  return jsonResponse({ ok: true, items: items.slice(0, Math.max(1, Math.min(limit, 200))) });
 }
 
 function getSession(e) {
-  const sessionId = e.parameter.sessionId;
+  const sessionId = String((e.parameter && e.parameter.sessionId) || "").trim();
   if (!sessionId) return jsonResponse({ ok: false, errorCode: "SESSION_ID_REQUIRED" });
   const folder = getFolder();
   const fileName = sessionId + ".json";
   const files = folder.getFilesByName(fileName);
   if (!files.hasNext()) return jsonResponse({ ok: false, errorCode: "SESSION_NOT_FOUND" });
   const payload = JSON.parse(files.next().getBlob().getDataAsString() || "{}");
-  return jsonResponse({ ok: true, payload: payload });
+  return jsonResponse({ ok: true, payload: payload, sessionId: sessionId });
 }
 
 function deleteSession(body) {
-  const sessionId = body.sessionId;
+  const sessionId = String((body && body.sessionId) || "").trim();
   if (!sessionId) return jsonResponse({ ok: false, errorCode: "SESSION_ID_REQUIRED" });
   const folder = getFolder();
   const files = folder.getFilesByName(sessionId + ".json");

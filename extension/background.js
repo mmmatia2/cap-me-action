@@ -24,7 +24,8 @@ const DEFAULT_SYNC_STATE = {
   failureCount: 0,
   quotaWarning: false,
   lastErrorCode: null,
-  lastErrorAt: null
+  lastErrorAt: null,
+  lastErrorDetail: null
 };
 const DEFAULT_TEAM_LIBRARY_CACHE = { items: [], updatedAt: null };
 
@@ -273,10 +274,6 @@ function sessionById(sessions, sessionId) {
   return sessions.find((x) => x.id === sessionId) ?? null;
 }
 
-function queueHasSession(syncQueue, sessionId) {
-  return syncQueue.some((item) => item.sessionId === sessionId);
-}
-
 function buildSyncPayload(session, steps, capturedBy, syncRevision, maskInputValues) {
   const maskedSteps = steps.map((step) => {
     if (!maskInputValues) {
@@ -342,6 +339,7 @@ async function uploadSessionToEndpoint(syncConfig, session, steps) {
       },
       body: JSON.stringify({
         schemaVersion: APP_SCHEMA_VERSION,
+        accessToken: tokenResult.token,
         payload,
         client: { name: "cap-me-action-extension", version: chrome.runtime.getManifest().version }
       })
@@ -362,14 +360,20 @@ async function uploadSessionToEndpoint(syncConfig, session, steps) {
   }
 
   let body = {};
+  let rawText = "";
   try {
-    body = await response.json();
+    rawText = await response.text();
+    body = rawText ? JSON.parse(rawText) : {};
   } catch {
     body = {};
   }
 
   if (!response.ok || body?.ok === false) {
-    return { ok: false, errorCode: String(body?.errorCode ?? "UPLOAD_FAILED") };
+    return {
+      ok: false,
+      errorCode: String(body?.errorCode ?? body?.error ?? `HTTP_${response.status}`),
+      detail: rawText ? rawText.slice(0, 240) : null
+    };
   }
 
   return {
@@ -409,8 +413,17 @@ function ensureSessionQueued(store, sessionId, reason) {
     return { ok: false, errorCode: "SYNC_ENDPOINT_MISSING" };
   }
 
-  if (!queueHasSession(store.syncQueue, sessionId)) {
+  const existingIndex = store.syncQueue.findIndex((item) => item.sessionId === sessionId);
+  if (existingIndex < 0) {
     store.syncQueue.push(createQueueItem(sessionId, reason));
+  } else {
+    const existing = store.syncQueue[existingIndex];
+    store.syncQueue[existingIndex] = {
+      ...existing,
+      reason,
+      nextRetryAt: nowTs(),
+      updatedAt: nowTs()
+    };
   }
   markSessionSyncStatus(session, { status: "pending", errorCode: null });
   return { ok: true };
@@ -541,6 +554,7 @@ async function processSyncQueue(trigger = "manual") {
       i -= 1;
       store.syncState.successCount += 1;
       store.syncState.lastErrorCode = null;
+      store.syncState.lastErrorDetail = null;
       changed = true;
       continue;
     }
@@ -569,6 +583,7 @@ async function processSyncQueue(trigger = "manual") {
     store.syncState.failureCount += 1;
     store.syncState.lastErrorCode = errorCode;
     store.syncState.lastErrorAt = nowTs();
+    store.syncState.lastErrorDetail = uploadResult.detail ?? null;
     changed = true;
   }
 
@@ -859,6 +874,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const queued = ensureSessionQueued(store, targetSessionId, "manual-last");
       await saveStore(store);
       await scheduleSyncAlarm(store.syncQueue);
+      await processSyncQueue("manual-last");
       sendResponse({ ok: queued.ok, sessionId: targetSessionId, error: queued.errorCode ?? null });
       return;
     }
@@ -872,6 +888,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const queued = ensureSessionQueued(store, targetSessionId, "manual-id");
       await saveStore(store);
       await scheduleSyncAlarm(store.syncQueue);
+      await processSyncQueue("manual-id");
       sendResponse({ ok: queued.ok, sessionId: targetSessionId, error: queued.errorCode ?? null });
       return;
     }
