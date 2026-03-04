@@ -647,7 +647,13 @@ window.addEventListener("message", (event) => {
     return;
   }
 
-  if (data.type === "REQUEST_SESSIONS") {
+  const requestId = typeof data.requestId === "string" ? data.requestId : "";
+  const isSessionRequest =
+    data.type === "REQUEST_SESSIONS" ||
+    data.type === "REQUEST_CAPTURE_SESSIONS" ||
+    requestId.startsWith("cap_me_bridge_");
+
+  if (isSessionRequest) {
     if (!hasStorageApi()) {
       window.postMessage(
         {
@@ -696,7 +702,7 @@ window.addEventListener("message", (event) => {
     data.type === "REQUEST_TEAM_AUTH" ||
     data.type === "REQUEST_TEAM_TOKEN" ||
     data.type === "REQUEST_AUTH_TOKEN" ||
-    (typeof data.requestId === "string" && data.requestId.startsWith("cap_me_team_auth_"));
+    requestId.startsWith("cap_me_team_auth_");
 
   if (isTeamAuthRequest) {
     sendRuntimeMessage({ type: "GET_SYNC_ACCESS_TOKEN" }).then((result) => {
@@ -716,16 +722,8 @@ window.addEventListener("message", (event) => {
     return;
   }
 
-  window.postMessage(
-    {
-      channel: "CAP_ME_APP_BRIDGE",
-      type: "SESSIONS_RESPONSE",
-      requestId: data.requestId,
-      ok: false,
-      error: "unsupported_bridge_request"
-    },
-    "*"
-  );
+  // Ignore unrelated bridge messages.
+  return;
 });
 
 if (chrome?.storage?.onChanged?.addListener) {
