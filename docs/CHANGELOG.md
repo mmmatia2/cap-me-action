@@ -29,3 +29,10 @@ All notable user-visible changes should be recorded here.
   - Added inspector `Sign In` / `Sign Out` controls with connected account display.
   - Added OAuth client ID helper script: `pnpm extension:set-oauth-client-id -- --client-id \"...apps.googleusercontent.com\"`.
   - Expanded `docs/TEAM_SYNC_APPS_SCRIPT.md` into full step-by-step production runbook.
+
+## 2026-03-04
+
+- Hardened Team Sync runbook auth guidance:
+  - Added optional `CAPME_DEBUG_AUTH` script property and temporary `debugAuth` probe flow.
+  - Updated Apps Script template to resolve token identity via Google userinfo/tokeninfo fallback before session email.
+  - Added stricter folder ID parsing and explicit folder access error code for faster setup diagnosis.

@@ -31,6 +31,7 @@ In Apps Script, go to `Project Settings -> Script properties` and add:
 
 - `CAPME_FOLDER_ID`: Drive folder ID from Step 1.
 - `CAPME_ALLOWED_EMAILS`: comma-separated allowed emails (lowercase).
+- `CAPME_DEBUG_AUTH`: optional, set `true` only while troubleshooting auth.
 
 Example:
 
@@ -138,6 +139,13 @@ Pass criteria:
 - `AUTH_REQUIRED` or sign-in fails:
   - Verify OAuth client is Chrome Extension type and bound to correct extension ID.
   - Reload extension after manifest update.
+  - Validate token in the app tab:
+    - `fetch("https://oauth2.googleapis.com/tokeninfo?access_token=<TOKEN>").then(r => r.json())`
+  - Enable temporary debug endpoint:
+    - Set script property `CAPME_DEBUG_AUTH=true`
+    - Call `.../exec?action=debugAuth&accessToken=<TOKEN>`
+    - Confirm returned email/source are correct.
+    - Set `CAPME_DEBUG_AUTH=false` again after validation.
 - `AUTH_DENIED`:
   - Check allowed/test users in OAuth consent and `CAPME_ALLOWED_EMAILS`.
   - Verify token email with:
@@ -182,13 +190,18 @@ function parseBody(e) {
   }
 }
 
-function getAllowedEmails() {
-  const raw = PropertiesService.getScriptProperties().getProperty("CAPME_ALLOWED_EMAILS") || "";
-  return raw.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
-}
-
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function getAllowedEmails() {
+  const raw = PropertiesService.getScriptProperties().getProperty("CAPME_ALLOWED_EMAILS") || "";
+  return raw.split(",").map((x) => normalizeEmail(x)).filter(Boolean);
+}
+
+function isDebugAuthEnabled() {
+  const raw = PropertiesService.getScriptProperties().getProperty("CAPME_DEBUG_AUTH") || "";
+  return normalizeEmail(raw) === "true";
 }
 
 function getAccessToken(e, body) {
@@ -208,48 +221,84 @@ function getEmailFromGoogleSession() {
 function getEmailFromAccessToken(accessToken) {
   if (!accessToken) return null;
   try {
-    const url =
+    const userinfo = UrlFetchApp.fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+      method: "get",
+      headers: { Authorization: "Bearer " + accessToken },
+      muteHttpExceptions: true
+    });
+    if (userinfo.getResponseCode() === 200) {
+      const payload = JSON.parse(userinfo.getContentText() || "{}");
+      const email = normalizeEmail(payload.email);
+      if (email) return email;
+    }
+
+    const tokenInfoUrl =
       "https://oauth2.googleapis.com/tokeninfo?access_token=" +
       encodeURIComponent(accessToken);
-    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (response.getResponseCode() !== 200) return null;
-    const payload = JSON.parse(response.getContentText() || "{}");
-    return normalizeEmail(payload.email) || null;
+    const tokenInfo = UrlFetchApp.fetch(tokenInfoUrl, { muteHttpExceptions: true });
+    if (tokenInfo.getResponseCode() !== 200) return null;
+    const tokenInfoBody = JSON.parse(tokenInfo.getContentText() || "{}");
+    return normalizeEmail(tokenInfoBody.email) || null;
   } catch (error) {
     return null;
   }
 }
 
-function resolveUserEmail(e, body) {
+function resolveIdentity(e, body) {
   const accessToken = getAccessToken(e, body);
   const tokenEmail = getEmailFromAccessToken(accessToken);
-  if (tokenEmail) return tokenEmail;
+  if (tokenEmail) return { email: tokenEmail, source: "token" };
+
   const sessionEmail = getEmailFromGoogleSession();
-  if (sessionEmail) return sessionEmail;
-  return null;
+  if (sessionEmail) return { email: sessionEmail, source: "session" };
+
+  return { email: null, source: "none" };
 }
 
 function assertAllowedUser(e, body) {
-  const email = resolveUserEmail(e, body);
+  const identity = resolveIdentity(e, body);
+  const email = identity.email;
   if (!email) {
     throw new Error("AUTH_REQUIRED");
   }
+
   const allow = getAllowedEmails();
-  if (allow.length > 0 && !allow.includes(email)) throw new Error("AUTH_DENIED");
-  return email;
+  if (allow.length > 0 && !allow.includes(email) && allow.indexOf("*") < 0) {
+    throw new Error("AUTH_DENIED");
+  }
+  return identity;
 }
 
 function getFolder() {
   const raw = PropertiesService.getScriptProperties().getProperty("CAPME_FOLDER_ID") || "";
-  const folderId = String(raw).split("?")[0].trim();
+  const match = String(raw).trim().match(/[-\w]{25,}/);
+  const folderId = match ? match[0] : "";
   if (!folderId) throw new Error("FOLDER_NOT_CONFIGURED");
-  return DriveApp.getFolderById(folderId);
+  try {
+    return DriveApp.getFolderById(folderId);
+  } catch (error) {
+    throw new Error("FOLDER_ACCESS_DENIED_OR_INVALID_ID");
+  }
 }
 
 function doGet(e) {
   try {
-    assertAllowedUser(e, null);
     const action = (e.parameter && e.parameter.action) || "";
+
+    if (action === "debugAuth") {
+      if (!isDebugAuthEnabled()) {
+        return jsonResponse({ ok: false, errorCode: "DEBUG_DISABLED" });
+      }
+      const identity = resolveIdentity(e, null);
+      return jsonResponse({
+        ok: Boolean(identity.email),
+        email: identity.email,
+        source: identity.source,
+        tokenPresent: Boolean(getAccessToken(e, null))
+      });
+    }
+
+    assertAllowedUser(e, null);
     if (action === "listSessions") return listSessions(e);
     if (action === "getSession") return getSession(e);
     return jsonResponse({ ok: false, errorCode: "UNKNOWN_ACTION" });
@@ -261,9 +310,9 @@ function doGet(e) {
 function doPost(e) {
   try {
     const body = parseBody(e);
-    const email = assertAllowedUser(e, body);
+    const identity = assertAllowedUser(e, body);
     const action = (e.parameter && e.parameter.action) || "";
-    if (action === "uploadSession") return uploadSession(body, email);
+    if (action === "uploadSession") return uploadSession(body, identity.email);
     if (action === "deleteSession") return deleteSession(body);
     return jsonResponse({ ok: false, errorCode: "UNKNOWN_ACTION" });
   } catch (error) {
