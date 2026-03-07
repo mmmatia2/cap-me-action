@@ -16,7 +16,16 @@ This runbook is the production path for `CMA-005` and the canonical deployment g
 
 - Team sync protocol: `1.0.0`
 - Session/export schema: `1.1.0`
-- Backend health/version endpoint returns both protocol and backend version.
+- Backend health/version endpoint returns protocol and backend version.
+- Backend `version` now also exposes the current repo-backed supported action list and request conventions.
+- Important: the deployed Apps Script web app is external; repo inspection does not prove the live deployment matches repo source until it is redeployed and rechecked.
+
+## Current auth authority
+
+- Token authority for the active app flow is the extension background.
+- The React app should obtain team auth only through the page bridge.
+- The app no longer relies on a locally persisted bearer token for normal team-library reads.
+- Apps Script still retains session/token fallback behavior in code, but that is compatibility behavior, not the primary app contract.
 
 ## Step 1: Prepare Drive folder
 
@@ -67,6 +76,7 @@ Expected:
 - `service = cap-me-team-library`
 - `protocolVersion = 1.0.0`
 - a concrete `backendVersion`
+- `version` also shows `supportedActions` and `requestConventions`
 
 If the request redirects to Google login, deployment access is not correctly set to `Anyone`.
 
@@ -113,6 +123,7 @@ Then reload the extension in `chrome://extensions`.
    - optionally add allow-list emails client-side
 3. Click `Save Sync Settings`.
 4. Click `Sign In` and approve account access.
+5. Treat the inspector sign-in result as the source of truth for team-library auth.
 
 ## Step 10: Reproduce upload + list + load
 
@@ -122,6 +133,7 @@ Follow `docs/checklists/team-library-fresh-setup.md`.
 
 - `AUTH_REQUIRED`
   - Re-sign in from inspector.
+  - The app should not be carrying a manual fallback token anymore.
   - Verify token in the app tab:
     - `fetch("https://oauth2.googleapis.com/tokeninfo?access_token=<TOKEN>").then(r => r.json())`
   - Temporarily set `CAPME_DEBUG_AUTH=true`.
@@ -131,6 +143,13 @@ Follow `docs/checklists/team-library-fresh-setup.md`.
 - `AUTH_DENIED`
   - Check `CAPME_ALLOWED_EMAILS`.
   - Confirm token email and allowed email are identical and lowercase.
+- `EXTENSION_UNAVAILABLE`
+  - Reload the unpacked extension.
+  - Reopen the editor from the extension entrypoint if possible.
+  - If the app is open on a page where the content script bridge is unavailable, team-library auth cannot be obtained.
+- `TOKEN_UNAVAILABLE`
+  - Confirm inspector sign-in succeeds.
+  - If sign-in succeeds but app loads still fail, inspect the bridge path between app and content script.
 - `HTTP_302` or Google login HTML
   - Deployment access is wrong or endpoint URL is stale.
 - `HTTP_404`
@@ -151,3 +170,11 @@ Follow `docs/checklists/team-library-fresh-setup.md`.
 - `GET ?action=getSession&sessionId=...&protocolVersion=1.0.0&accessToken=...`
 - `POST ?action=uploadSession`
 - `POST ?action=deleteSession`
+
+## Review boundary notes
+
+- Canonical protocol contract: `docs/protocols/team-library-protocol.md`
+- Canonical frontend constants: `app/src/lib/protocol.ts`
+- The backend currently echoes `protocolVersion` in responses but does not reject mismatched request versions.
+- The current remote flow is reproducible from repo source, but live deployment parity still depends on manual Apps Script redeploy + verification.
+- The current primary auth path is intentionally narrowed to extension background -> bridge -> app.

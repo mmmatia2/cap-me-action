@@ -1,6 +1,10 @@
 const TEAM_SYNC_PROTOCOL_VERSION = "1.0.0";
 const TEAM_SYNC_BACKEND_VERSION = "2026-03-06";
 const TEAM_SYNC_SERVICE_NAME = "cap-me-team-library";
+const TEAM_SYNC_SUPPORTED_ACTIONS = {
+  get: ["health", "version", "debugAuth", "listSessions", "getSession"],
+  post: ["uploadSession", "deleteSession"]
+};
 
 function withResponseMeta(payload) {
   const base = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : { value: payload };
@@ -137,7 +141,16 @@ function versionResponse() {
   return jsonResponse({
     ok: true,
     status: "ready",
-    checkedAt: Date.now()
+    checkedAt: Date.now(),
+    supportedActions: TEAM_SYNC_SUPPORTED_ACTIONS,
+    requestConventions: {
+      protocolVersionQueryParam: true,
+      accessTokenQueryParam: true,
+      accessTokenBodyField: "accessToken",
+      payloadBodyField: "payload",
+      deleteSessionBodyField: "sessionId",
+      googleSessionFallback: true
+    }
   });
 }
 

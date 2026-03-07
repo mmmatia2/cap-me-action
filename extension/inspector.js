@@ -555,7 +555,10 @@ function saveSyncConfig() {
 function signInForSync() {
   chrome.runtime.sendMessage({ type: "AUTH_SIGN_IN" }, (response) => {
     if (!response?.ok) {
-      setSyncConfigStatusText(`Sign in failed: ${response?.errorCode ?? "unknown error"}`);
+      const detail = String(response?.error ?? "").trim();
+      setSyncConfigStatusText(
+        `Sign in failed: ${response?.errorCode ?? "unknown error"}${detail ? ` (${detail})` : ""}`
+      );
       return;
     }
     const email = response.accountEmail ?? null;

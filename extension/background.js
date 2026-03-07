@@ -195,13 +195,17 @@ function setStorage(value) {
 function getAuthToken(interactive) {
   return new Promise((resolve) => {
     if (!chrome.identity?.getAuthToken) {
-      resolve({ ok: false, errorCode: "AUTH_UNAVAILABLE" });
+      resolve({ ok: false, errorCode: "AUTH_UNAVAILABLE", error: "chrome.identity.getAuthToken unavailable" });
       return;
     }
 
     chrome.identity.getAuthToken({ interactive: Boolean(interactive) }, (token) => {
       if (chrome.runtime.lastError || !token) {
-        resolve({ ok: false, errorCode: interactive ? "AUTH_DENIED" : "AUTH_REQUIRED" });
+        resolve({
+          ok: false,
+          errorCode: interactive ? "AUTH_DENIED" : "AUTH_REQUIRED",
+          error: chrome.runtime.lastError?.message || (!token ? "No auth token returned." : "Unknown auth error")
+        });
         return;
       }
       resolve({ ok: true, token });

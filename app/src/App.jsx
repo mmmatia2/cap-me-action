@@ -5,6 +5,7 @@ import {
   APP_BRIDGE_REQUEST_TYPES,
   APP_BRIDGE_RESPONSE_TYPES,
   TEAM_SYNC_BACKEND_ACTIONS,
+  TEAM_SYNC_AUTH_ERROR_CODES,
   TEAM_SYNC_PROTOCOL_VERSION
 } from "./lib/protocol";
 import { deleteStepById, moveStepInList, patchStepById, resequenceSteps } from "./editor/state/sessionReducer";
@@ -568,7 +569,7 @@ function loadTeamAuthViaPageBridge(timeoutMs = 1500) {
     };
 
     const timer = setTimeout(() => {
-      finish({ ok: false, token: "", error: "bridge_timeout" });
+      finish({ ok: false, token: "", error: TEAM_SYNC_AUTH_ERROR_CODES.extensionUnavailable });
     }, timeoutMs);
 
     window.addEventListener("message", onMessage);
@@ -582,6 +583,36 @@ function loadTeamAuthViaPageBridge(timeoutMs = 1500) {
       "*"
     );
   });
+}
+
+function normalizeTeamAuthErrorCode(value) {
+  const text = normalizeText(value).toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  if (!text || text === "TOKEN_UNAVAILABLE") {
+    return TEAM_SYNC_AUTH_ERROR_CODES.tokenUnavailable;
+  }
+  if (text === "BRIDGE_TIMEOUT") {
+    return TEAM_SYNC_AUTH_ERROR_CODES.extensionUnavailable;
+  }
+  return text;
+}
+
+function explainTeamAuthError(errorCode) {
+  switch (normalizeTeamAuthErrorCode(errorCode)) {
+    case TEAM_SYNC_AUTH_ERROR_CODES.extensionUnavailable:
+      return "Extension auth bridge unavailable. Reload the extension and open the editor from the extension flow.";
+    case TEAM_SYNC_AUTH_ERROR_CODES.authUnavailable:
+      return "Extension auth is unavailable. Confirm the extension is loaded with identity permissions.";
+    case TEAM_SYNC_AUTH_ERROR_CODES.authRequired:
+      return "You are not signed in for team sync. Sign in from the extension inspector, then retry.";
+    case TEAM_SYNC_AUTH_ERROR_CODES.authDenied:
+      return "Team auth was denied. Re-run Sign In from the extension inspector and approve access.";
+    case TEAM_SYNC_AUTH_ERROR_CODES.tokenExpired:
+      return "Team auth token expired. Sign out and sign in again from the extension inspector.";
+    case TEAM_SYNC_AUTH_ERROR_CODES.tokenUnavailable:
+      return "No sync access token is available from the extension background.";
+    default:
+      return normalizeText(errorCode) || "unknown error";
+  }
 }
 
 function parseEditorHandoffFromUrl() {
@@ -607,7 +638,6 @@ export default function App() {
   const [extensionStatus, setExtensionStatus] = useState("");
   const [dataSource, setDataSource] = useState("local");
   const [teamApiBase, setTeamApiBase] = useState("");
-  const [teamAccessToken, setTeamAccessToken] = useState("");
   const [teamSessions, setTeamSessions] = useState([]);
   const [selectedTeamSessionId, setSelectedTeamSessionId] = useState("");
   const [teamStatus, setTeamStatus] = useState("");
@@ -650,10 +680,7 @@ export default function App() {
     if (storedBase) {
       setTeamApiBase(storedBase);
     }
-    const storedToken = window.localStorage.getItem("cap_me_team_api_token");
-    if (storedToken) {
-      setTeamAccessToken(storedToken);
-    }
+    window.localStorage.removeItem("cap_me_team_api_token");
   }, []);
 
   useEffect(() => {
@@ -661,12 +688,6 @@ export default function App() {
       window.localStorage.setItem("cap_me_team_api_base", teamApiBase);
     }
   }, [teamApiBase]);
-
-  useEffect(() => {
-    if (teamAccessToken) {
-      window.localStorage.setItem("cap_me_team_api_token", teamAccessToken);
-    }
-  }, [teamAccessToken]);
 
   useEffect(() => {
     if (!hasExtensionStorage) {
@@ -1166,7 +1187,7 @@ export default function App() {
     importExtensionSessionById(selectedExtensionSessionId);
   }
 
-  function buildTeamEndpoint(action, query = {}, accessTokenOverride = "") {
+  function buildTeamEndpoint(action, query = {}, accessToken = "") {
     const base = String(teamApiBase || "").trim();
     if (!base) {
       throw new Error("Team API endpoint is required.");
@@ -1174,7 +1195,7 @@ export default function App() {
     const url = new URL(base);
     url.searchParams.set("action", action);
     url.searchParams.set("protocolVersion", TEAM_SYNC_PROTOCOL_VERSION);
-    const token = normalizeText(accessTokenOverride || teamAccessToken);
+    const token = normalizeText(accessToken);
     if (token) {
       url.searchParams.set("accessToken", token);
     }
@@ -1187,23 +1208,26 @@ export default function App() {
   }
 
   async function ensureTeamAccessToken() {
-    const current = normalizeText(teamAccessToken);
     const bridged = await loadTeamAuthViaPageBridge(1600);
     const token = normalizeText(bridged?.token || "");
     if (bridged?.ok && token) {
-      if (token !== current) {
-        setTeamAccessToken(token);
-      }
-      return token;
+      return { ok: true, token, errorCode: null };
     }
-    return current;
+    return {
+      ok: false,
+      token: "",
+      errorCode: normalizeTeamAuthErrorCode(bridged?.error)
+    };
   }
 
   async function loadFromTeamLibrary(preferredSessionId = "") {
     try {
       setTeamStatus("Loading team sessions...");
-      const accessToken = await ensureTeamAccessToken();
-      const response = await fetch(buildTeamEndpoint(TEAM_SYNC_BACKEND_ACTIONS.listSessions, { limit: 50 }, accessToken), {
+      const auth = await ensureTeamAccessToken();
+      if (!auth.ok) {
+        throw new Error(auth.errorCode || TEAM_SYNC_AUTH_ERROR_CODES.tokenUnavailable);
+      }
+      const response = await fetch(buildTeamEndpoint(TEAM_SYNC_BACKEND_ACTIONS.listSessions, { limit: 50 }, auth.token), {
         method: "GET"
       });
       const body = await response.json();
@@ -1223,8 +1247,10 @@ export default function App() {
       setTeamStatus(items.length ? `Loaded ${items.length} team session(s).` : "No team sessions found.");
       return { ok: true, items, error: null };
     } catch (err) {
-      setTeamStatus(`Team load failed: ${err instanceof Error ? err.message : "unknown error"}`);
-      return { ok: false, items: [], error: err instanceof Error ? err.message : "unknown_error" };
+      const code = normalizeTeamAuthErrorCode(err instanceof Error ? err.message : "unknown_error");
+      const message = explainTeamAuthError(code);
+      setTeamStatus(`Team load failed: ${message}`);
+      return { ok: false, items: [], error: code };
     }
   }
 
@@ -1234,8 +1260,11 @@ export default function App() {
     }
     try {
       setTeamStatus("Importing team session...");
-      const accessToken = await ensureTeamAccessToken();
-      const response = await fetch(buildTeamEndpoint(TEAM_SYNC_BACKEND_ACTIONS.getSession, { sessionId }, accessToken), {
+      const auth = await ensureTeamAccessToken();
+      if (!auth.ok) {
+        throw new Error(auth.errorCode || TEAM_SYNC_AUTH_ERROR_CODES.tokenUnavailable);
+      }
+      const response = await fetch(buildTeamEndpoint(TEAM_SYNC_BACKEND_ACTIONS.getSession, { sessionId }, auth.token), {
         method: "GET"
       });
       const body = await response.json();
@@ -1252,11 +1281,11 @@ export default function App() {
       setSelectedTeamSessionId(sessionId);
       return true;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "unknown error";
-      if (message === "SESSION_NOT_FOUND") {
+      const code = normalizeTeamAuthErrorCode(err instanceof Error ? err.message : "unknown error");
+      if (code === "SESSION_NOT_FOUND") {
         setTeamStatus(options.notFoundMessage || `Requested team session ${sessionId} was not found.`);
       } else {
-        setTeamStatus(`Team import failed: ${message}`);
+        setTeamStatus(`Team import failed: ${explainTeamAuthError(code)}`);
       }
       return false;
     }
@@ -1376,16 +1405,6 @@ export default function App() {
                       className="w-full px-3 py-2 rounded-lg border border-border bg-surface-2 text-text focus:outline-none focus:border-accent"
                     />
                   </div>
-                  <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-                    <label className="text-xs font-semibold text-muted uppercase tracking-wider">Bearer Token</label>
-                    <input
-                      type="password"
-                      value={teamAccessToken}
-                      placeholder="(optional)"
-                      onChange={(event) => setTeamAccessToken(event.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-surface-2 text-text focus:outline-none focus:border-accent"
-                    />
-                  </div>
                   <button 
                     type="button" 
                     onClick={loadFromTeamLibrary} 
@@ -1422,6 +1441,9 @@ export default function App() {
                   >
                     Import Team Session
                   </button>
+                  <p className="m-0 text-xs text-muted max-w-[420px]">
+                    Team Library auth comes from the loaded extension via the page bridge. Sign in from the extension inspector if team access is unavailable.
+                  </p>
                 </div>
               )}
             </div>

@@ -424,20 +424,24 @@ const DOCK_MINIMIZED = { width: 220, height: 64 };
 function sendRuntimeMessage(message) {
   return new Promise((resolve) => {
     if (!hasLiveExtensionContext()) {
-      resolve({ ok: false, error: "Extension context unavailable" });
+      resolve({ ok: false, errorCode: "EXTENSION_UNAVAILABLE" });
       return;
     }
 
     try {
       chrome.runtime.sendMessage(message, (response) => {
         if (chrome.runtime.lastError) {
-          resolve({ ok: false, error: chrome.runtime.lastError.message });
+          resolve({
+            ok: false,
+            errorCode: "AUTH_UNAVAILABLE",
+            error: chrome.runtime.lastError.message
+          });
           return;
         }
         resolve(response);
       });
     } catch (error) {
-      resolve({ ok: false, error: String(error) });
+      resolve({ ok: false, errorCode: "AUTH_UNAVAILABLE", error: String(error) });
     }
   });
 }
@@ -721,7 +725,7 @@ window.addEventListener("message", (event) => {
           protocolVersion: TEAM_SYNC_PROTOCOL_VERSION,
           ok,
           token: ok ? String(result.token) : null,
-          error: ok ? null : String(result?.errorCode || result?.error || "token_unavailable")
+          error: ok ? null : String(result?.errorCode || result?.error || "TOKEN_UNAVAILABLE")
         },
         "*"
       );
