@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { APP_SCHEMA_VERSION, buildSessionExport, migrateSessionPayload } from "./lib/migrations";
+import {
+  APP_BRIDGE_CHANNEL,
+  APP_BRIDGE_REQUEST_TYPES,
+  APP_BRIDGE_RESPONSE_TYPES,
+  TEAM_SYNC_BACKEND_ACTIONS,
+  TEAM_SYNC_PROTOCOL_VERSION
+} from "./lib/protocol";
 import { deleteStepById, moveStepInList, patchStepById, resequenceSteps } from "./editor/state/sessionReducer";
 import { StepList } from "./editor/components/StepList";
 import { StepDetails } from "./editor/components/StepDetails";
@@ -481,7 +488,7 @@ function loadSessionsViaPageBridge(timeoutMs = 1500) {
         return;
       }
       const data = event.data;
-      if (!data || data.channel !== "CAP_ME_APP_BRIDGE" || data.type !== "SESSIONS_RESPONSE") {
+      if (!data || data.channel !== APP_BRIDGE_CHANNEL || data.type !== APP_BRIDGE_RESPONSE_TYPES.sessions) {
         return;
       }
       if (data.requestId !== requestId) {
@@ -500,7 +507,15 @@ function loadSessionsViaPageBridge(timeoutMs = 1500) {
     }, timeoutMs);
 
     window.addEventListener("message", onMessage);
-    window.postMessage({ channel: "CAP_ME_APP_BRIDGE", type: "REQUEST_SESSIONS", requestId }, "*");
+    window.postMessage(
+      {
+        channel: APP_BRIDGE_CHANNEL,
+        type: APP_BRIDGE_REQUEST_TYPES.sessions,
+        requestId,
+        protocolVersion: TEAM_SYNC_PROTOCOL_VERSION
+      },
+      "*"
+    );
   });
 }
 
@@ -539,7 +554,7 @@ function loadTeamAuthViaPageBridge(timeoutMs = 1500) {
         return;
       }
       const data = event.data;
-      if (!data || data.channel !== "CAP_ME_APP_BRIDGE" || data.type !== "TEAM_AUTH_RESPONSE") {
+      if (!data || data.channel !== APP_BRIDGE_CHANNEL || data.type !== APP_BRIDGE_RESPONSE_TYPES.teamAuth) {
         return;
       }
       if (data.requestId !== requestId) {
@@ -557,7 +572,15 @@ function loadTeamAuthViaPageBridge(timeoutMs = 1500) {
     }, timeoutMs);
 
     window.addEventListener("message", onMessage);
-    window.postMessage({ channel: "CAP_ME_APP_BRIDGE", type: "REQUEST_TEAM_AUTH", requestId }, "*");
+    window.postMessage(
+      {
+        channel: APP_BRIDGE_CHANNEL,
+        type: APP_BRIDGE_REQUEST_TYPES.teamAuth,
+        requestId,
+        protocolVersion: TEAM_SYNC_PROTOCOL_VERSION
+      },
+      "*"
+    );
   });
 }
 
@@ -1150,6 +1173,7 @@ export default function App() {
     }
     const url = new URL(base);
     url.searchParams.set("action", action);
+    url.searchParams.set("protocolVersion", TEAM_SYNC_PROTOCOL_VERSION);
     const token = normalizeText(accessTokenOverride || teamAccessToken);
     if (token) {
       url.searchParams.set("accessToken", token);
@@ -1179,7 +1203,7 @@ export default function App() {
     try {
       setTeamStatus("Loading team sessions...");
       const accessToken = await ensureTeamAccessToken();
-      const response = await fetch(buildTeamEndpoint("listSessions", { limit: 50 }, accessToken), {
+      const response = await fetch(buildTeamEndpoint(TEAM_SYNC_BACKEND_ACTIONS.listSessions, { limit: 50 }, accessToken), {
         method: "GET"
       });
       const body = await response.json();
@@ -1211,7 +1235,7 @@ export default function App() {
     try {
       setTeamStatus("Importing team session...");
       const accessToken = await ensureTeamAccessToken();
-      const response = await fetch(buildTeamEndpoint("getSession", { sessionId }, accessToken), {
+      const response = await fetch(buildTeamEndpoint(TEAM_SYNC_BACKEND_ACTIONS.getSession, { sessionId }, accessToken), {
         method: "GET"
       });
       const body = await response.json();

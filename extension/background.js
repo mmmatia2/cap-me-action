@@ -2,6 +2,7 @@
 // Inputs: capture/runtime messages. Outputs: capture state, sessions, steps, and sync queue state.
 const STORAGE_VERSION = 2;
 const APP_SCHEMA_VERSION = "1.1.0";
+const TEAM_SYNC_PROTOCOL_VERSION = "1.0.0";
 const SYNC_ALARM_NAME = "capme-sync-tick";
 const MAX_SESSIONS = 20;
 const MAX_STEPS = 500;
@@ -340,6 +341,7 @@ async function uploadSessionToEndpoint(syncConfig, session, steps) {
       },
       body: JSON.stringify({
         schemaVersion: APP_SCHEMA_VERSION,
+        protocolVersion: TEAM_SYNC_PROTOCOL_VERSION,
         accessToken: tokenResult.token,
         payload,
         client: { name: "cap-me-action-extension", version: chrome.runtime.getManifest().version }
@@ -757,7 +759,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const email = await fetchProfileEmail(tokenResult.token);
       store.syncConfig.accountEmail = email;
       await saveStore(store);
-      sendResponse({ ok: true, accountEmail: email ?? null });
+      sendResponse({ ok: true, accountEmail: email ?? null, protocolVersion: TEAM_SYNC_PROTOCOL_VERSION });
       return;
     }
 
@@ -768,7 +770,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       store.syncConfig.accountEmail = null;
       await saveStore(store);
-      sendResponse({ ok: true });
+      sendResponse({ ok: true, protocolVersion: TEAM_SYNC_PROTOCOL_VERSION });
       return;
     }
 
@@ -778,7 +780,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse(tokenResult);
         return;
       }
-      sendResponse({ ok: true, token: tokenResult.token });
+      sendResponse({ ok: true, token: tokenResult.token, protocolVersion: TEAM_SYNC_PROTOCOL_VERSION });
       return;
     }
 
@@ -881,7 +883,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sessionId: targetSessionId,
         sync: session?.sync ?? null,
         queueItem,
-        syncState: store.syncState
+        syncState: store.syncState,
+        protocolVersion: TEAM_SYNC_PROTOCOL_VERSION
       });
       return;
     }

@@ -1,6 +1,6 @@
 # STATE (Living Context)
 
-Last updated: 2026-03-03
+Last updated: 2026-03-06
 Owner: project maintainers
 Doc mode: lightweight Context Mesh (see `docs/CONTEXT_MESH_LIGHT.md`)
 
@@ -12,6 +12,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 ## Update Triggers
 
 - New runtime message contract or payload shape.
+- Team-library protocol/version changes.
 - Data model or schema version changes.
 - User-visible behavior changes in extension or editor.
 - New known risk, mitigation, or blocker.
@@ -31,19 +32,21 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - Service worker includes MV3-safe sync queue scaffolding with `chrome.alarms` retries and runtime sync commands (`SYNC_SESSION_BY_ID`, `SYNC_LAST_SESSION`, `GET_SYNC_STATUS`).
   - Inspector can preview recent step thumbnails.
   - Inspector includes sync status/actions and editor handoff while preserving capture/export/reset controls.
-  - Inspector now includes editable sync settings UI for `syncConfig` (`enabled`, endpoint URL, auto-upload on stop, mask input values, allowed emails) with validation and save feedback.
-  - Inspector now includes sync account `Sign In`/`Sign Out` controls via runtime auth messages and displays connected account email.
+  - Inspector includes editable sync settings UI for `syncConfig` (`enabled`, endpoint URL, auto-upload on stop, mask input values, allowed emails) with validation and save feedback.
+  - Inspector includes sync account `Sign In`/`Sign Out` controls via runtime auth messages and displays connected account email.
+  - Remote team-library flow now has a repo-backed Google Apps Script source artifact under `backend/google-apps-script/team-library/`.
   - React app imports exported session JSON, supports per-step instruction/note editing, and exports edited JSON.
   - React app supports editable step titles, step reorder/delete controls, and Markdown export.
-  - React app now supports "merge with next" in step list and stable drag-end reset handling.
+  - React app supports "merge with next" in step list and stable drag-end reset handling.
   - React app includes light/dark editor theming and stronger title sanitization against selector-chain noise.
   - React app supports drag-and-drop step ordering and cleaner fallback labels for noisy selector targets.
   - React app supports direct session loading from extension storage (`chrome.storage.local`) and HTML guide export templates.
   - React app supports session loading via content-script bridge when running on `localhost` without direct chrome API access.
-  - React app now parses editor deep-link query params (`source`, `sessionId`) and auto-loads/imports requested local or team sessions when available.
-  - React app now provides explicit not-found guidance when deep-linked session IDs cannot be resolved.
-  - Annotation `type` (`highlight`/`redact`) now survives app normalization and migration/export roundtrips.
-  - HTML export now renders redactions as opaque masks and reports redaction counts separately from highlights.
+  - React app parses editor deep-link query params (`source`, `sessionId`) and auto-loads/imports requested local or team sessions when available.
+  - React app provides explicit not-found guidance when deep-linked session IDs cannot be resolved.
+  - React app and content script now include `TEAM_SYNC_PROTOCOL_VERSION` on team-library bridge requests/responses and backend queries.
+  - Annotation `type` (`highlight`/`redact`) survives app normalization and migration/export roundtrips.
+  - HTML export renders redactions as opaque masks and reports redaction counts separately from highlights.
   - React app uses schema-aware migration helpers (`contracts.ts`, `migrations.ts`) for import/export compatibility.
   - React app supports a dual source model (`Local` extension + `Team` Apps Script endpoint scaffold) while keeping the existing local bridge path.
   - React app supports inline screenshot highlight boxes per step, with highlight labels persisted into JSON and included in Markdown/HTML exports.
@@ -67,7 +70,13 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 - `SYNC_SESSION_BY_ID`: `{ sessionId: string }`
 - `SYNC_LAST_SESSION`: `{}`
 - `GET_SYNC_STATUS`: `{ sessionId?: string }`
+- `GET_SYNC_ACCESS_TOKEN`: `{}`
 - `OPEN_EDITOR`: `{ source?: "local" | "team", sessionId?: string }`
+
+## Team-Library Protocol
+
+- Current team sync protocol version: `1.0.0`
+- Canonical contract doc: `docs/protocols/team-library-protocol.md`
 
 ## Data Model Snapshot
 
@@ -80,12 +89,15 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 - App editor file is still oversized and has unresolved integration defects.
 - Test and CI quality gates are not in place yet.
 - Sync/auth UX and production backend wiring are not fully complete.
+- Deployed Apps Script remains an external manual deployment even though source is now versioned in repo.
 - Data retention limits (`20 sessions`, `500 steps`) can surprise users.
 
 ## Operational Runbook
 
 - Team sync + OAuth setup and validation runbook: `docs/TEAM_SYNC_APPS_SCRIPT.md`
-- Manifest OAuth helper command: `pnpm extension:set-oauth-client-id -- --client-id \"<client-id>.apps.googleusercontent.com\"`
+- Fresh setup checklist: `docs/checklists/team-library-fresh-setup.md`
+- Repo-backed Apps Script source: `backend/google-apps-script/team-library/`
+- Manifest OAuth helper command: `pnpm extension:set-oauth-client-id -- --client-id "<client-id>.apps.googleusercontent.com"`
 
 ## Active Execution Plan
 
@@ -97,4 +109,4 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 
 ## Next Micro-Task
 
-Validate OAuth + Apps Script production sync flow end-to-end with real users and real Drive folder, then document setup/troubleshooting.
+Redeploy the repo-backed Apps Script source, validate `health` / `version`, then rerun fresh setup upload + list + load using the checklist.

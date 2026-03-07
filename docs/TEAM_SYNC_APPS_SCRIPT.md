@@ -2,396 +2,152 @@
 
 Purpose: no-server shared session library for small teams.
 
-This runbook is the production path for `CMA-005`.
+This runbook is the production path for `CMA-005` and the canonical deployment guide for the repo-backed backend source.
 
-## Quotas (consumer/free baseline)
+## Canonical source artifacts
 
-- Apps Script URL Fetch calls/day: 20,000
-- Apps Script total trigger/runtime per day: ~90 minutes
+- Backend code: `backend/google-apps-script/team-library/Code.gs`
+- Backend manifest/scopes: `backend/google-apps-script/team-library/appsscript.json`
+- Backend notes: `backend/google-apps-script/team-library/README.md`
+- Protocol contract: `docs/protocols/team-library-protocol.md`
+- Fresh setup checklist: `docs/checklists/team-library-fresh-setup.md`
 
-These are planning numbers for small-team usage.
+## Current protocol/version
 
-## Step 1: Prepare Drive Folder
+- Team sync protocol: `1.0.0`
+- Session/export schema: `1.1.0`
+- Backend health/version endpoint returns both protocol and backend version.
+
+## Step 1: Prepare Drive folder
 
 1. Create a dedicated Google Drive folder for synced session JSON files.
-2. Open the folder and copy the folder ID from the URL.
-   - Example URL: `https://drive.google.com/drive/folders/<FOLDER_ID>`
+2. Copy the folder ID from the folder URL.
 3. Keep this value for `CAPME_FOLDER_ID`.
 
-## Step 2: Create Apps Script Project
+## Step 2: Create Apps Script project
 
 1. Go to `https://script.google.com`.
 2. Create a new project.
-3. Replace default code with the template in "Minimal Apps Script server template" below.
-4. Save the project.
+3. Replace the default `Code.gs` with `backend/google-apps-script/team-library/Code.gs`.
+4. Replace/configure the script manifest using `backend/google-apps-script/team-library/appsscript.json`.
+5. Save the project.
 
-## Step 3: Set Script Properties
+## Step 3: Set script properties
 
-In Apps Script, go to `Project Settings -> Script properties` and add:
+In `Project Settings -> Script properties`, add:
 
-- `CAPME_FOLDER_ID`: Drive folder ID from Step 1.
-- `CAPME_ALLOWED_EMAILS`: comma-separated allowed emails (lowercase).
-- `CAPME_DEBUG_AUTH`: optional, set `true` only while troubleshooting auth.
+- `CAPME_FOLDER_ID`: Drive folder ID from Step 1
+- `CAPME_ALLOWED_EMAILS`: comma-separated allowed emails in lowercase
+- `CAPME_DEBUG_AUTH`: `false` by default; set `true` only while troubleshooting
 
 Example:
 
 - `CAPME_ALLOWED_EMAILS=alice@company.com,bob@company.com`
 
-## Step 4: Deploy Apps Script Web App
+## Step 4: Deploy Apps Script web app
 
 1. Click `Deploy -> New deployment`.
 2. Type: `Web app`.
 3. Execute as: `Me`.
-4. Access: `Anyone` (not `Anyone with Google account`).
-5. Deploy and copy the generated web app URL.
+4. Access: `Anyone`.
+5. Deploy and copy the generated `/exec` URL.
 
 This URL is your `syncConfig.endpointUrl`.
 
-Why this setup: extension/background fetches are API calls (not interactive browser pages), so cookie/session auth is unreliable. The script below validates Google access tokens from request payload/query and applies `CAPME_ALLOWED_EMAILS` server-side.
+## Step 5: Verify backend deployment
 
-Quick verification after deploy:
+Open these URLs directly:
 
-1. Open the web app URL in an incognito window (logged out is fine) with:
-   - `.../exec?action=listSessions&limit=1&accessToken=invalid`
-2. Expected: JSON response (`AUTH_REQUIRED`/`AUTH_DENIED`/`ok`) from your script.
-3. If you get redirected to Google login, deployment access is still not `Anyone`.
+- `.../exec?action=health`
+- `.../exec?action=version`
 
-## Step 5: Get Chrome Extension ID
+Expected:
+
+- JSON response
+- `service = cap-me-team-library`
+- `protocolVersion = 1.0.0`
+- a concrete `backendVersion`
+
+If the request redirects to Google login, deployment access is not correctly set to `Anyone`.
+
+## Step 6: Get Chrome extension ID
 
 1. Open `chrome://extensions`.
 2. Enable `Developer mode`.
-3. Load this repo's `extension/` folder as unpacked (if not already loaded).
-4. Copy the extension ID shown on the card.
+3. Load this repo's `extension/` folder as unpacked.
+4. Copy the extension ID.
 
-You need this ID to create a Chrome Extension OAuth client in Google Cloud.
+## Step 7: Create OAuth client ID (Google Cloud)
 
-## Step 6: Create OAuth Client ID (Google Cloud)
-
-1. Open `https://console.cloud.google.com` and select/create a project.
-2. Configure OAuth consent screen if not done yet.
-3. Add scopes used by extension:
+1. Open `https://console.cloud.google.com`.
+2. Configure OAuth consent screen if not already configured.
+3. Add scopes used by the extension:
    - `openid`
    - `email`
    - `profile`
    - `https://www.googleapis.com/auth/drive.file`
-4. Add your team accounts as test users if app is in testing mode.
-5. Go to `APIs & Services -> Credentials`.
-6. Create credential: `OAuth client ID`.
-7. Application type: `Chrome Extension`.
-8. Enter extension ID from Step 5.
-9. Create and copy client ID.
+4. Add your team accounts as test users if the app is still in testing mode.
+5. Create `OAuth client ID`.
+6. Application type: `Chrome Extension`.
+7. Enter the extension ID from Step 6.
+8. Copy the generated client ID.
 
-Client ID format should end with `.apps.googleusercontent.com`.
+## Step 8: Apply OAuth client ID to the extension
 
-## Step 7: Apply OAuth Client ID to Manifest
-
-Option A (recommended helper script):
+Recommended:
 
 ```bash
 pnpm extension:set-oauth-client-id -- --client-id "YOUR_CLIENT_ID.apps.googleusercontent.com"
 ```
 
-Option B (manual):
+Then reload the extension in `chrome://extensions`.
 
-- Edit `extension/manifest.json` -> `oauth2.client_id`.
-
-Then reload extension in `chrome://extensions`.
-
-## Step 8: Configure Sync In Inspector
+## Step 9: Configure sync in inspector
 
 1. Open extension inspector.
 2. In `Sync Settings`:
-   - Enable sync.
-   - Paste endpoint URL from Step 4.
-   - Enable `Mask input values` (recommended).
-   - Set `Auto upload on stop` as desired.
-   - Add allow-list emails (optional, comma separated).
+   - enable sync
+   - paste the `/exec` endpoint URL
+   - enable `Mask input values` unless you explicitly need raw inputs
+   - set `Auto upload on stop` as desired
+   - optionally add allow-list emails client-side
 3. Click `Save Sync Settings`.
 4. Click `Sign In` and approve account access.
 
-Expected:
+## Step 10: Reproduce upload + list + load
 
-- Account text shows connected email.
-- Save confirmation appears.
+Follow `docs/checklists/team-library-fresh-setup.md`.
 
-## Step 9: End-to-End Validation (Two Users)
+## Troubleshooting
 
-User A:
-
-1. Start capture, perform 3-5 actions, stop capture.
-2. Trigger `Sync Selected Session` in inspector.
-3. Confirm sync status moves to `synced`.
-
-User B:
-
-1. Open editor, choose `Team Library` source.
-2. Use same endpoint URL.
-3. Load library and import User A session.
-4. Confirm steps/screenshots render correctly.
-
-Pass criteria:
-
-- Session uploaded and retrievable by another allowed user.
-- `SESSION_NOT_FOUND`, `AUTH_DENIED`, and endpoint misconfigurations produce clear errors.
-
-## Step 10: Troubleshooting
-
-- `AUTH_REQUIRED` or sign-in fails:
-  - Verify OAuth client is Chrome Extension type and bound to correct extension ID.
-  - Reload extension after manifest update.
-  - Validate token in the app tab:
+- `AUTH_REQUIRED`
+  - Re-sign in from inspector.
+  - Verify token in the app tab:
     - `fetch("https://oauth2.googleapis.com/tokeninfo?access_token=<TOKEN>").then(r => r.json())`
-  - Enable temporary debug endpoint:
-    - Set script property `CAPME_DEBUG_AUTH=true`
-    - Call `.../exec?action=debugAuth&accessToken=<TOKEN>`
-    - Confirm returned email/source are correct.
-    - Set `CAPME_DEBUG_AUTH=false` again after validation.
-- `AUTH_DENIED`:
-  - Check allowed/test users in OAuth consent and `CAPME_ALLOWED_EMAILS`.
-  - Verify token email with:
-    - `https://oauth2.googleapis.com/tokeninfo?access_token=<TOKEN>`
-  - Ensure `resolveUserEmail(e, body)` checks token email before `Session.getActiveUser()`.
-- `HTTP_302` or generic `UPLOAD_FAILED`:
-  - Usually means old deployment/auth mode mismatch.
-  - Confirm script code includes `getAccessToken` + `assertAllowedUser(e, body)` from this doc.
-  - Redeploy as Web App after saving code changes, then update inspector endpoint if URL changed.
-- `HTTP_404` on sync upload:
-  - Check `chrome.storage.local.get(["syncState"], console.log)` and inspect `syncState.lastErrorDetail`.
-  - Verify `request=...action=uploadSession` and `response=...` values point to your active `/exec` deployment.
-  - If response points to a Google login or generic HTML page, deployment access is not fully public (`Anyone`) or endpoint URL is stale.
-- `SYNC_ENDPOINT_MISSING`:
-  - Save sync settings with endpoint URL.
-- `SESSION_NOT_FOUND`:
-  - Confirm upload succeeded and session ID exists in Drive folder JSON file.
-- `FOLDER_NOT_CONFIGURED`:
-  - Verify `CAPME_FOLDER_ID` script property.
+  - Temporarily set `CAPME_DEBUG_AUTH=true`.
+  - Validate:
+    - `.../exec?action=debugAuth&accessToken=<TOKEN>`
+  - Set `CAPME_DEBUG_AUTH=false` again after debugging.
+- `AUTH_DENIED`
+  - Check `CAPME_ALLOWED_EMAILS`.
+  - Confirm token email and allowed email are identical and lowercase.
+- `HTTP_302` or Google login HTML
+  - Deployment access is wrong or endpoint URL is stale.
+- `HTTP_404`
+  - Check inspector storage:
+    - `chrome.storage.local.get(["syncState"], console.log)`
+  - Inspect `syncState.lastErrorDetail` request/response URLs.
+- `FOLDER_NOT_CONFIGURED`
+  - Check `CAPME_FOLDER_ID`.
+- `FOLDER_ACCESS_DENIED_OR_INVALID_ID`
+  - Check Drive access for the account executing the web app.
 
-## API Contract
+## API surface summary
 
+- `GET ?action=health`
+- `GET ?action=version`
+- `GET ?action=debugAuth&accessToken=...` when debug is enabled
+- `GET ?action=listSessions&limit=50&protocolVersion=1.0.0&accessToken=...`
+- `GET ?action=getSession&sessionId=...&protocolVersion=1.0.0&accessToken=...`
 - `POST ?action=uploadSession`
-- `GET ?action=listSessions&limit=50&cursor=...`
-- `GET ?action=getSession&sessionId=...`
-- `POST ?action=deleteSession` (optional admin action)
-
-## Minimal Apps Script server template
-
-```javascript
-function jsonResponse(payload) {
-  const output = ContentService.createTextOutput(JSON.stringify(payload));
-  output.setMimeType(ContentService.MimeType.JSON);
-  return output;
-}
-
-function parseBody(e) {
-  try {
-    return JSON.parse((e && e.postData && e.postData.contents) || "{}");
-  } catch (error) {
-    throw new Error("INVALID_JSON_BODY");
-  }
-}
-
-function normalizeEmail(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function getAllowedEmails() {
-  const raw = PropertiesService.getScriptProperties().getProperty("CAPME_ALLOWED_EMAILS") || "";
-  return raw.split(",").map((x) => normalizeEmail(x)).filter(Boolean);
-}
-
-function isDebugAuthEnabled() {
-  const raw = PropertiesService.getScriptProperties().getProperty("CAPME_DEBUG_AUTH") || "";
-  return normalizeEmail(raw) === "true";
-}
-
-function getAccessToken(e, body) {
-  const fromBody = String((body && body.accessToken) || "").trim();
-  if (fromBody) return fromBody;
-  return String((e && e.parameter && e.parameter.accessToken) || "").trim();
-}
-
-function getEmailFromGoogleSession() {
-  try {
-    return normalizeEmail(Session.getActiveUser().getEmail()) || null;
-  } catch (error) {
-    return null;
-  }
-}
-
-function getEmailFromAccessToken(accessToken) {
-  if (!accessToken) return null;
-  try {
-    const userinfo = UrlFetchApp.fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-      method: "get",
-      headers: { Authorization: "Bearer " + accessToken },
-      muteHttpExceptions: true
-    });
-    if (userinfo.getResponseCode() === 200) {
-      const payload = JSON.parse(userinfo.getContentText() || "{}");
-      const email = normalizeEmail(payload.email);
-      if (email) return email;
-    }
-
-    const tokenInfoUrl =
-      "https://oauth2.googleapis.com/tokeninfo?access_token=" +
-      encodeURIComponent(accessToken);
-    const tokenInfo = UrlFetchApp.fetch(tokenInfoUrl, { muteHttpExceptions: true });
-    if (tokenInfo.getResponseCode() !== 200) return null;
-    const tokenInfoBody = JSON.parse(tokenInfo.getContentText() || "{}");
-    return normalizeEmail(tokenInfoBody.email) || null;
-  } catch (error) {
-    return null;
-  }
-}
-
-function resolveIdentity(e, body) {
-  const accessToken = getAccessToken(e, body);
-  const tokenEmail = getEmailFromAccessToken(accessToken);
-  if (tokenEmail) return { email: tokenEmail, source: "token" };
-
-  const sessionEmail = getEmailFromGoogleSession();
-  if (sessionEmail) return { email: sessionEmail, source: "session" };
-
-  return { email: null, source: "none" };
-}
-
-function assertAllowedUser(e, body) {
-  const identity = resolveIdentity(e, body);
-  const email = identity.email;
-  if (!email) {
-    throw new Error("AUTH_REQUIRED");
-  }
-
-  const allow = getAllowedEmails();
-  if (allow.length > 0 && !allow.includes(email) && allow.indexOf("*") < 0) {
-    throw new Error("AUTH_DENIED");
-  }
-  return identity;
-}
-
-function getFolder() {
-  const raw = PropertiesService.getScriptProperties().getProperty("CAPME_FOLDER_ID") || "";
-  const match = String(raw).trim().match(/[-\w]{25,}/);
-  const folderId = match ? match[0] : "";
-  if (!folderId) throw new Error("FOLDER_NOT_CONFIGURED");
-  try {
-    return DriveApp.getFolderById(folderId);
-  } catch (error) {
-    throw new Error("FOLDER_ACCESS_DENIED_OR_INVALID_ID");
-  }
-}
-
-function doGet(e) {
-  try {
-    const action = (e.parameter && e.parameter.action) || "";
-
-    if (action === "debugAuth") {
-      if (!isDebugAuthEnabled()) {
-        return jsonResponse({ ok: false, errorCode: "DEBUG_DISABLED" });
-      }
-      const identity = resolveIdentity(e, null);
-      return jsonResponse({
-        ok: Boolean(identity.email),
-        email: identity.email,
-        source: identity.source,
-        tokenPresent: Boolean(getAccessToken(e, null))
-      });
-    }
-
-    assertAllowedUser(e, null);
-    if (action === "listSessions") return listSessions(e);
-    if (action === "getSession") return getSession(e);
-    return jsonResponse({ ok: false, errorCode: "UNKNOWN_ACTION" });
-  } catch (error) {
-    return jsonResponse({ ok: false, errorCode: String(error.message || error) });
-  }
-}
-
-function doPost(e) {
-  try {
-    const body = parseBody(e);
-    const identity = assertAllowedUser(e, body);
-    const action = (e.parameter && e.parameter.action) || "";
-    if (action === "uploadSession") return uploadSession(body, identity.email);
-    if (action === "deleteSession") return deleteSession(body);
-    return jsonResponse({ ok: false, errorCode: "UNKNOWN_ACTION" });
-  } catch (error) {
-    return jsonResponse({ ok: false, errorCode: String(error.message || error) });
-  }
-}
-
-function uploadSession(body, email) {
-  const payload = body.payload || {};
-  const sessionId = payload.session && payload.session.id;
-  if (!sessionId) return jsonResponse({ ok: false, errorCode: "SESSION_ID_REQUIRED" });
-
-  payload.meta = payload.meta || {};
-  payload.meta.capturedBy = email;
-  payload.meta.serverSavedAt = Date.now();
-
-  const folder = getFolder();
-  const name = sessionId + ".json";
-  const existing = folder.getFilesByName(name);
-  if (existing.hasNext()) {
-    existing.next().setTrashed(true);
-  }
-  const file = folder.createFile(name, JSON.stringify(payload), MimeType.PLAIN_TEXT);
-  return jsonResponse({ ok: true, sessionId: sessionId, fileId: file.getId(), uploadedAt: Date.now(), revision: payload.meta.syncRevision || 1 });
-}
-
-function listSessions(e) {
-  const folder = getFolder();
-  const files = folder.getFiles();
-  const items = [];
-  while (files.hasNext()) {
-    const file = files.next();
-    if (!file.getName().endsWith(".json")) continue;
-    let payload = {};
-    try {
-      const content = file.getBlob().getDataAsString();
-      payload = JSON.parse(content || "{}");
-    } catch (error) {
-      continue;
-    }
-    const session = payload.session || {};
-    items.push({
-      id: session.id || file.getName().replace(".json", ""),
-      sessionId: session.id || file.getName().replace(".json", ""),
-      title: session.lastTitle || session.startTitle || session.lastUrl || "Untitled",
-      stepsCount: session.stepsCount || (payload.steps || []).length || 0,
-      updatedAt: session.updatedAt || payload.exportedAt || file.getLastUpdated().getTime()
-    });
-  }
-  items.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  const limit = Number((e.parameter && e.parameter.limit) || 50);
-  return jsonResponse({ ok: true, items: items.slice(0, Math.max(1, Math.min(limit, 200))) });
-}
-
-function getSession(e) {
-  const sessionId = String((e.parameter && e.parameter.sessionId) || "").trim();
-  if (!sessionId) return jsonResponse({ ok: false, errorCode: "SESSION_ID_REQUIRED" });
-  const folder = getFolder();
-  const fileName = sessionId + ".json";
-  const files = folder.getFilesByName(fileName);
-  if (!files.hasNext()) return jsonResponse({ ok: false, errorCode: "SESSION_NOT_FOUND" });
-  const payload = JSON.parse(files.next().getBlob().getDataAsString() || "{}");
-  return jsonResponse({ ok: true, payload: payload, sessionId: sessionId });
-}
-
-function deleteSession(body) {
-  const sessionId = String((body && body.sessionId) || "").trim();
-  if (!sessionId) return jsonResponse({ ok: false, errorCode: "SESSION_ID_REQUIRED" });
-  const folder = getFolder();
-  const files = folder.getFilesByName(sessionId + ".json");
-  if (!files.hasNext()) return jsonResponse({ ok: false, errorCode: "SESSION_NOT_FOUND" });
-  files.next().setTrashed(true);
-  return jsonResponse({ ok: true, sessionId: sessionId });
-}
-```
-
-## Official References
-
-- Chrome Identity API: https://developer.chrome.com/docs/extensions/reference/api/identity
-- Integrate OAuth in Chrome extensions: https://developer.chrome.com/docs/extensions/how-to/integrate/oauth
-- Google OAuth consent screen setup: https://developers.google.com/workspace/guides/configure-oauth-consent
-- Google OAuth app verification and scopes: https://support.google.com/cloud/answer/13463073
+- `POST ?action=deleteSession`

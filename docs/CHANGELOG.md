@@ -2,6 +2,16 @@
 
 All notable user-visible changes should be recorded here.
 
+## 2026-03-06
+
+- Hardening stage: remote team-library flow is now frozen into repo-backed artifacts.
+  - Added canonical Apps Script backend source at `backend/google-apps-script/team-library/Code.gs`.
+  - Added backend manifest/scopes at `backend/google-apps-script/team-library/appsscript.json`.
+  - Added canonical protocol doc at `docs/protocols/team-library-protocol.md`.
+  - Added fresh setup verification checklist at `docs/checklists/team-library-fresh-setup.md`.
+  - Added `TEAM_SYNC_PROTOCOL_VERSION = 1.0.0` to team-library bridge requests/responses and backend request paths.
+  - Added backend `health` / `version` responses for reproducible setup validation.
+
 ## 2026-03-03
 
 - Established lightweight Context Mesh documentation system.

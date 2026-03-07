@@ -1,5 +1,8 @@
-﻿// Purpose: publish normalized capture events from the page context to the MV3 worker.
+// Purpose: publish normalized capture events from the page context to the MV3 worker.
 // Inputs: DOM, history, and window events. Outputs: STEP_CAPTURED messages with rich selectors/metadata.
+const TEAM_SYNC_PROTOCOL_VERSION = "1.0.0";
+const APP_BRIDGE_CHANNEL = "CAP_ME_APP_BRIDGE";
+
 function safeSendMessage(message) {
   try {
     if (typeof chrome === "undefined" || !chrome.runtime?.id) {
@@ -643,7 +646,7 @@ window.addEventListener("message", (event) => {
     return;
   }
   const data = event.data;
-  if (!data || data.channel !== "CAP_ME_APP_BRIDGE") {
+  if (!data || data.channel !== APP_BRIDGE_CHANNEL) {
     return;
   }
 
@@ -657,9 +660,10 @@ window.addEventListener("message", (event) => {
     if (!hasStorageApi()) {
       window.postMessage(
         {
-          channel: "CAP_ME_APP_BRIDGE",
+          channel: APP_BRIDGE_CHANNEL,
           type: "SESSIONS_RESPONSE",
           requestId: data.requestId,
+          protocolVersion: TEAM_SYNC_PROTOCOL_VERSION,
           ok: false,
           error: "storage_unavailable"
         },
@@ -673,9 +677,10 @@ window.addEventListener("message", (event) => {
         const payload = result ?? {};
         window.postMessage(
           {
-            channel: "CAP_ME_APP_BRIDGE",
+            channel: APP_BRIDGE_CHANNEL,
             type: "SESSIONS_RESPONSE",
             requestId: data.requestId,
+            protocolVersion: TEAM_SYNC_PROTOCOL_VERSION,
             ok: true,
             sessions: payload.sessions ?? [],
             steps: payload.steps ?? []
@@ -686,9 +691,10 @@ window.addEventListener("message", (event) => {
     } catch {
       window.postMessage(
         {
-          channel: "CAP_ME_APP_BRIDGE",
+          channel: APP_BRIDGE_CHANNEL,
           type: "SESSIONS_RESPONSE",
           requestId: data.requestId,
+          protocolVersion: TEAM_SYNC_PROTOCOL_VERSION,
           ok: false,
           error: "storage_read_failed"
         },
@@ -709,9 +715,10 @@ window.addEventListener("message", (event) => {
       const ok = Boolean(result?.ok && result?.token);
       window.postMessage(
         {
-          channel: "CAP_ME_APP_BRIDGE",
+          channel: APP_BRIDGE_CHANNEL,
           type: "TEAM_AUTH_RESPONSE",
           requestId: data.requestId,
+          protocolVersion: TEAM_SYNC_PROTOCOL_VERSION,
           ok,
           token: ok ? String(result.token) : null,
           error: ok ? null : String(result?.errorCode || result?.error || "token_unavailable")
@@ -787,3 +794,4 @@ document.addEventListener(
 );
 
 refreshDockState();
+

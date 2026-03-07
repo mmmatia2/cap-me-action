@@ -119,10 +119,24 @@ type Step = {
 ## App bridge messages (web app <-> content script via page postMessage)
 
 - Channel: `CAP_ME_APP_BRIDGE`
+- Protocol version: `1.0.0`
 - App -> content script:
-  - `REQUEST_SESSIONS`: `{ requestId }`
+  - `REQUEST_SESSIONS`: `{ requestId, protocolVersion }`
+  - `REQUEST_TEAM_AUTH`: `{ requestId, protocolVersion }`
 - Content script -> app:
-  - `SESSIONS_RESPONSE`: `{ requestId, ok, sessions?, steps?, error? }`
+  - `SESSIONS_RESPONSE`: `{ requestId, protocolVersion, ok, sessions?, steps?, error? }`
+  - `TEAM_AUTH_RESPONSE`: `{ requestId, protocolVersion, ok, token?, error? }`
+
+Legacy compatibility still accepted in content script during this hardening stage:
+
+- `REQUEST_CAPTURE_SESSIONS`
+- `REQUEST_TEAM_TOKEN`
+- `REQUEST_AUTH_TOKEN`
+- requestId prefixes `cap_me_bridge_` / `cap_me_team_auth_`
+
+Canonical contract for the remote team-library flow:
+
+- `docs/protocols/team-library-protocol.md`
 
 ## Data Retention Rules
 
