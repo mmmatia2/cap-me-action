@@ -1,12 +1,13 @@
 # STATE (Living Context)
 
-Last updated: 2026-03-06
+Last updated: 2026-03-18
 Owner: project maintainers
-Doc mode: lightweight Context Mesh (see `docs/CONTEXT_MESH_LIGHT.md`)
+Doc mode: direct Architect/Executor model-to-model workflow (see `docs/CONTEXT_MESH_LIGHT.md`)
 
 ## Purpose
 
-This is the source-of-truth operational snapshot for the product and codebase.
+This is the active source-of-truth operational snapshot for the product and codebase.
+If historical docs conflict with this file or current repo code, trust this file and repo code first.
 Update this file when behavior, architecture, contracts, risks, or priorities change.
 
 ## Update Triggers
@@ -18,10 +19,9 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 - New known risk, mitigation, or blocker.
 - Priority/milestone changes.
 
-## Current Delivery Status
+## Implemented (Repo-Backed, Not Fully Runtime-Validated)
 
-- Current micro-task number: 29
-- What is working end-to-end:
+- The items below are implemented in repo code. They should not be read as proof that the currently deployed backend or live runtime has been revalidated in this working tree.
   - Monorepo root with pnpm workspace configuration.
   - React/Vite app can inspect latest persisted `sessions` and `steps` when `chrome.storage.local` is available.
   - MV3 extension scaffold under `extension/`.
@@ -76,7 +76,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 ## Team-Library Protocol
 
 - Current team sync protocol version: `1.0.0`
-- Canonical contract doc: `docs/protocols/team-library-protocol.md`
+- Canonical contract doc: `docs/team-library-protocol.md`
 
 ## Data Model Snapshot
 
@@ -86,27 +86,43 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 
 ## Current Risks (Short List)
 
-- App editor file is still oversized and has unresolved integration defects.
-- Test and CI quality gates are not in place yet.
+- App editor orchestration is still concentrated in `app/src/App.jsx` even after recent component extraction.
+- Test and CI quality gates are partial: docs-sync exists, but broader build/test enforcement is not established in repo.
 - Sync/auth UX and production backend wiring are not fully complete.
 - Deployed Apps Script remains an external manual deployment even though source is now versioned in repo.
 - Data retention limits (`20 sessions`, `500 steps`) can surprise users.
 
+## Validated
+
+- Repo inspection confirms the team-library protocol version is consistently `1.0.0` across app, extension, and Apps Script source.
+- Repo inspection confirms the payload/schema version is consistently `1.1.0` across app export/import helpers and extension sync payloads.
+- Repo inspection confirms the March roadmap and backlog docs are historical planning artifacts and should not be treated as active execution truth.
+
+## Unvalidated
+
+- Live deployed Apps Script parity with `backend/google-apps-script/team-library/Code.gs`.
+- Current end-to-end sign-in, upload, list, and import behavior against the active deployed backend.
+- Current runtime behavior of unauthenticated `health` / `version` on the deployed backend.
+- Any claim that the March plan or backlog still reflects current delivery status beyond what is directly visible in repo code.
+
+Latest recorded runtime validation evidence in `HEAD` conflicts with the repo-backed expectation that `health` and `version` are unauthenticated, but `docs/validation/2026-03-07-linux-mint-auth-boundary-runtime.md` is currently deleted in this working tree and is therefore not an active local source during this refresh.
+
+## Historical
+
+- `docs/archive/audit-pack/` is a retained point-in-time audit baseline, not active execution truth.
+- `docs/archive/roadmaps/2026-03-scribe-compatible-corporate-ai-plan.md` and `docs/archive/roadmaps/2026-03-execution-backlog.md` are retained March 2026 planning snapshots.
+- `docs/validation/` notes are historical recorded evidence when present in the working tree.
+- Historical docs may still be useful context, but they require reconciliation against this file and current repo code before reuse.
+
 ## Operational Runbook
 
 - Team sync + OAuth setup and validation runbook: `docs/TEAM_SYNC_APPS_SCRIPT.md`
-- Fresh setup checklist: `docs/checklists/team-library-fresh-setup.md`
+- Fresh setup checklist: `docs/team-library-fresh-setup.md`
 - Repo-backed Apps Script source: `backend/google-apps-script/team-library/`
 - Manifest OAuth helper command: `pnpm extension:set-oauth-client-id -- --client-id "<client-id>.apps.googleusercontent.com"`
 
-## Active Execution Plan
+## Historical Planning References
 
-- Roadmap: `docs/roadmaps/2026-03-scribe-compatible-corporate-ai-plan.md`
-- Backlog: `docs/roadmaps/2026-03-execution-backlog.md`
 - Scope ADR: `docs/adr/0001-scribe-compatibility-scope-boundary.md`
-- Current launch mode: 2-week internal production launch candidate.
-- Final roadmap step: unified professional UI system across popup/dock/inspector/editor.
-
-## Next Micro-Task
-
-Redeploy the repo-backed Apps Script source, validate `health` / `version`, then rerun fresh setup upload + list + load using the checklist.
+- Historical roadmap snapshot: `docs/archive/roadmaps/2026-03-scribe-compatible-corporate-ai-plan.md`
+- Historical backlog snapshot: `docs/archive/roadmaps/2026-03-execution-backlog.md`

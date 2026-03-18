@@ -1,8 +1,12 @@
 # 2026-03 Execution Backlog
 
+Historical snapshot notice: this is a March 2026 backlog snapshot, not active execution truth. Some backlog items are already visible in repo code, while others remain unvalidated or incomplete. Use `docs/STATE.md` and current repo code for present status instead of this file alone.
+
+Latest recorded runtime validation evidence in `HEAD` conflicts with the repo-backed backend expectation, but `docs/validation/2026-03-07-linux-mint-auth-boundary-runtime.md` is currently deleted in the working tree and is therefore not an active local source during this refresh.
+
 Derived from:
 
-- `docs/roadmaps/2026-03-scribe-compatible-corporate-ai-plan.md`
+- `docs/archive/roadmaps/2026-03-scribe-compatible-corporate-ai-plan.md`
 - `docs/adr/0001-scribe-compatibility-scope-boundary.md`
 
 This backlog is ordered for a 2-week internal launch candidate.

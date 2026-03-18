@@ -11,8 +11,7 @@ const fixedFiles = [
   "docs/STATE.md",
   "docs/CONTEXT_MESH_LIGHT.md",
   "docs/CHANGELOG.md",
-  "docs/audit-pack/00-README.md",
-  "docs/audit-pack/07-quality-risks-and-known-gaps.md"
+  "docs/team-library-protocol.md"
 ];
 
 function readSafe(path) {
@@ -51,7 +50,8 @@ function main() {
     "",
     `Generated at: ${generatedAt}`,
     "",
-    "This file is generated. Source of truth remains the individual docs under `docs/`.",
+    "This file is generated. It includes the active documentation bundle only.",
+    "Source of truth remains the individual active docs under `docs/`.",
     ""
   ].join("\n");
 

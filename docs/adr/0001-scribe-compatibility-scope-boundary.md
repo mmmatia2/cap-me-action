@@ -57,8 +57,8 @@ Out of scope for this launch candidate:
 
 ## Rollout Plan
 
-1. Execute workstreams in `docs/roadmaps/2026-03-scribe-compatible-corporate-ai-plan.md`.
-2. Track delivery through milestone backlog in `docs/roadmaps/2026-03-execution-backlog.md`.
+1. Execute workstreams in `docs/archive/roadmaps/2026-03-scribe-compatible-corporate-ai-plan.md`.
+2. Track delivery through milestone backlog in `docs/archive/roadmaps/2026-03-execution-backlog.md`.
 3. Reassess parity gaps after launch candidate stabilization.
 
 ## References
@@ -67,5 +67,5 @@ Out of scope for this launch candidate:
   - `extension/`
   - `app/src/`
 - Related docs:
-  - `docs/roadmaps/2026-03-scribe-compatible-corporate-ai-plan.md`
+  - `docs/archive/roadmaps/2026-03-scribe-compatible-corporate-ai-plan.md`
   - `docs/STATE.md`

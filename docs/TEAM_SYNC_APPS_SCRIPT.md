@@ -9,8 +9,8 @@ This runbook is the production path for `CMA-005` and the canonical deployment g
 - Backend code: `backend/google-apps-script/team-library/Code.gs`
 - Backend manifest/scopes: `backend/google-apps-script/team-library/appsscript.json`
 - Backend notes: `backend/google-apps-script/team-library/README.md`
-- Protocol contract: `docs/protocols/team-library-protocol.md`
-- Fresh setup checklist: `docs/checklists/team-library-fresh-setup.md`
+- Protocol contract: `docs/team-library-protocol.md`
+- Fresh setup checklist: `docs/team-library-fresh-setup.md`
 
 ## Current protocol/version
 
@@ -127,7 +127,7 @@ Then reload the extension in `chrome://extensions`.
 
 ## Step 10: Reproduce upload + list + load
 
-Follow `docs/checklists/team-library-fresh-setup.md`.
+Follow `docs/team-library-fresh-setup.md`.
 
 ## Troubleshooting
 
@@ -173,7 +173,7 @@ Follow `docs/checklists/team-library-fresh-setup.md`.
 
 ## Review boundary notes
 
-- Canonical protocol contract: `docs/protocols/team-library-protocol.md`
+- Canonical protocol contract: `docs/team-library-protocol.md`
 - Canonical frontend constants: `app/src/lib/protocol.ts`
 - The backend currently echoes `protocolVersion` in responses but does not reject mismatched request versions.
 - The current remote flow is reproducible from repo source, but live deployment parity still depends on manual Apps Script redeploy + verification.

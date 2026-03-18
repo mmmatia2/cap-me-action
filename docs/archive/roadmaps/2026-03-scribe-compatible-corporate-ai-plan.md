@@ -1,5 +1,9 @@
 # 2026-03 Plan: Scribe-Compatible + Corporate AI
 
+Historical snapshot notice: this is a March 2026 planning record, not active execution truth. Some items in this plan are now implemented in repo code, some remain unvalidated, and others are incomplete. Use `docs/STATE.md` and current repo code for present status.
+
+Latest recorded runtime validation evidence in `HEAD` conflicts with the repo-backed backend expectation, but `docs/validation/2026-03-07-linux-mint-auth-boundary-runtime.md` is currently deleted in the working tree and is therefore not an active local source during this refresh.
+
 - Status: proposed
 - Date: 2026-03-03
 - Horizon: 2 weeks to internal production launch candidate
