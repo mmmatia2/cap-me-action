@@ -513,8 +513,11 @@ function openSelectedInEditor() {
     { type: "OPEN_EDITOR", payload: { source: "local", sessionId: selectedSessionId } },
     (response) => {
       if (!response?.ok) {
-        setStatusText(`Open editor failed: ${response?.error ?? "unknown error"}`);
+        setStatusText(`Open editor failed: ${response?.error ?? "unknown error"}. Start app with pnpm dev:app.`);
+        return;
       }
+      const openedLocal = typeof response.url === "string" && response.url.startsWith("http://localhost");
+      setStatusText(openedLocal ? "Opened local editor for selected session." : "Opened editor for selected session.");
     }
   );
 }

@@ -55,6 +55,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - Content script supports recorder hotkeys: `Alt+Shift+R` (start/stop), `Alt+Shift+Z` (discard last), `Alt+Shift+M` (dock minimize).
   - Action popup points to `ui-record-popup/index.html` with working start/stop capture and recent-session summaries, plus links to open the advanced inspector view.
   - Action popup includes direct "Open Last Capture In Editor" and "Download Last Capture JSON" actions, with hotkey copy aligned to actual shortcuts.
+  - Extension `OPEN_EDITOR` local handoff defaults to `http://localhost:5173` for no-auth local smoke flow, including clearer popup/inspector guidance when local app startup is needed.
   - Content script injects a floating recorder dock from `ui-floating-control/index.html` while capture is active, with live timer/step count and pause/finish controls.
   - Action popup uses local MV3-safe CSS/HTML (no remote Tailwind runtime), aligned to the intended visual direction while preserving existing capture/session wiring.
   - Floating dock has local CSS compact styling, per-tab step count via `GET_DOCK_STATE`, and working `Discard Last Step` action with in-dock feedback.

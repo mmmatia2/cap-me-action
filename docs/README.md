@@ -54,3 +54,17 @@ Smoke sample source: `app/public/samples/local-smoke-session.json`
 Auth boundary:
 - Not required for this smoke path: team-library sign-in, Apps Script deployment, remote sync.
 - Still required for team flows: `Load Team Sessions`, `Import Team Session`, and any live sync/auth validation.
+
+## Local Extension -> Editor Smoke (No Auth)
+
+Use this as the primary no-auth product smoke path for real captured artifacts.
+
+1. Start the editor app: `pnpm dev:app`
+2. Open `chrome://extensions`, enable Developer mode, and load unpacked: `extension/`
+3. Use the extension popup to start/stop a short capture on any page.
+4. In popup recent sessions, click a captured session card or `Open Last Capture In Editor`.
+5. In the editor, confirm local session import, edit one step, then export JSON/Markdown/HTML.
+
+Notes:
+- Default local editor handoff now targets `http://localhost:5173` for no-auth smoke runs.
+- If the editor tab does not load, verify `pnpm dev:app` is still running.

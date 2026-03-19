@@ -106,6 +106,7 @@ async function openEditorForSession(sessionId) {
   if (!response?.ok) {
     throw new Error(response?.error || "OPEN_EDITOR_FAILED");
   }
+  return response;
 }
 
 function renderRecentSessions(sessions, latestStepBySession) {
@@ -179,7 +180,11 @@ async function handleOpenEditor() {
     captureStatus.textContent = "No captured session yet. Start capture first.";
     return;
   }
-  await openEditorForSession(latest.id);
+  const response = await openEditorForSession(latest.id);
+  captureStatus.textContent = `Opened editor for ${latest.id}. If the page does not load, start the app with pnpm dev:app.`;
+  if (typeof response?.url === "string" && response.url.startsWith("http://localhost")) {
+    captureStatus.textContent = `Opened local editor for ${latest.id}.`;
+  }
 }
 
 async function handleDownloadLatestJson() {
@@ -198,7 +203,11 @@ async function handleDownloadLatestJson() {
 }
 
 async function handleRecentSessionOpen(sessionId) {
-  await openEditorForSession(sessionId);
+  const response = await openEditorForSession(sessionId);
+  captureStatus.textContent =
+    typeof response?.url === "string" && response.url.startsWith("http://localhost")
+      ? `Opened local editor for ${sessionId}.`
+      : `Opened editor for ${sessionId}. If needed, run pnpm dev:app locally.`;
 }
 
 captureToggle.addEventListener("click", () => {
@@ -210,7 +219,7 @@ openInspector.addEventListener("click", openInspectorPage);
 openInspectorFooter.addEventListener("click", openInspectorPage);
 openEditor.addEventListener("click", () => {
   handleOpenEditor().catch(() => {
-    captureStatus.textContent = "Unable to open editor.";
+    captureStatus.textContent = "Unable to open editor. Start the app with pnpm dev:app and try again.";
   });
 });
 downloadLastJson.addEventListener("click", () => {

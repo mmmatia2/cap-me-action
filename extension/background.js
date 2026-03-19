@@ -3,6 +3,8 @@
 const STORAGE_VERSION = 2;
 const APP_SCHEMA_VERSION = "1.1.0";
 const TEAM_SYNC_PROTOCOL_VERSION = "1.0.0";
+const LOCAL_EDITOR_URL = "http://localhost:5173";
+const LEGACY_HOSTED_EDITOR_URL = "https://cap-me-action.vercel.app";
 const SYNC_ALARM_NAME = "capme-sync-tick";
 const MAX_SESSIONS = 20;
 const MAX_STEPS = 500;
@@ -15,7 +17,7 @@ const DEFAULT_SYNC_CONFIG = {
   enabled: false,
   autoUploadOnStop: false,
   endpointUrl: "",
-  editorUrl: "https://cap-me-action.vercel.app",
+  editorUrl: LOCAL_EDITOR_URL,
   allowedEmails: [],
   maskInputValues: true
 };
@@ -95,11 +97,13 @@ function normalizeStep(step, idx) {
 }
 
 function normalizeSyncConfig(value) {
+  const rawEditorUrl = String(value?.editorUrl ?? DEFAULT_SYNC_CONFIG.editorUrl).trim();
+  const editorUrl = rawEditorUrl === LEGACY_HOSTED_EDITOR_URL ? LOCAL_EDITOR_URL : rawEditorUrl;
   return {
     ...DEFAULT_SYNC_CONFIG,
     ...(value ?? {}),
     endpointUrl: String(value?.endpointUrl ?? DEFAULT_SYNC_CONFIG.endpointUrl).trim(),
-    editorUrl: String(value?.editorUrl ?? DEFAULT_SYNC_CONFIG.editorUrl).trim(),
+    editorUrl,
     allowedEmails: Array.isArray(value?.allowedEmails)
       ? value.allowedEmails.map((x) => String(x).trim().toLowerCase()).filter(Boolean)
       : []
@@ -795,7 +799,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           ""
       ).trim();
       const source = String(message.payload?.source ?? "local").trim() || "local";
-      const editorUrl = store.syncConfig?.editorUrl || "https://cap-me-action.vercel.app";
+      const rawEditorUrl = String(store.syncConfig?.editorUrl || "").trim();
+      const editorUrl =
+        !rawEditorUrl || rawEditorUrl === LEGACY_HOSTED_EDITOR_URL
+          ? LOCAL_EDITOR_URL
+          : rawEditorUrl;
       const normalized = editorUrl.endsWith("/") ? editorUrl.slice(0, -1) : editorUrl;
       const url =
         sessionId
