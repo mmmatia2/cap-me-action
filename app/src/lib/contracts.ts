@@ -2,6 +2,7 @@
 // Inputs: in-memory payload objects. Outputs: normalized schema-aware payload fragments.
 
 export const APP_SCHEMA_VERSION = "1.1.0";
+export const SUPPORTED_IMPORT_SCHEMA_VERSIONS = [APP_SCHEMA_VERSION, "1.0.0"] as const;
 
 export type SyncStatus = "local" | "pending" | "synced" | "failed" | "blocked";
 
@@ -96,5 +97,62 @@ export function withSessionSync(session: SessionRecord): SessionRecord {
   }
 
   return merged;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+export function assertValidSessionPayloadContract(raw: unknown): asserts raw is SessionPayload {
+  if (!isRecord(raw)) {
+    throw new Error("Invalid SOP payload contract: payload must be an object.");
+  }
+
+  if (typeof raw.schemaVersion !== "string" || !raw.schemaVersion.trim()) {
+    throw new Error("Invalid SOP payload contract: schemaVersion is required.");
+  }
+  if (!SUPPORTED_IMPORT_SCHEMA_VERSIONS.includes(raw.schemaVersion as (typeof SUPPORTED_IMPORT_SCHEMA_VERSIONS)[number])) {
+    throw new Error(
+      `Invalid SOP payload contract: unsupported schemaVersion "${raw.schemaVersion}". Supported: ${SUPPORTED_IMPORT_SCHEMA_VERSIONS.join(", ")}.`
+    );
+  }
+
+  if (!isRecord(raw.session)) {
+    throw new Error("Invalid SOP payload contract: session object is required.");
+  }
+  if (typeof raw.session.id !== "string" || !raw.session.id.trim()) {
+    throw new Error("Invalid SOP payload contract: session.id is required.");
+  }
+
+  if (!Array.isArray(raw.steps)) {
+    throw new Error("Invalid SOP payload contract: steps must be an array.");
+  }
+
+  raw.steps.forEach((step, stepIndex) => {
+    if (!isRecord(step)) {
+      throw new Error(`Invalid SOP payload contract: steps[${stepIndex}] must be an object.`);
+    }
+
+    const annotations = step.annotations;
+    if (annotations === undefined) {
+      return;
+    }
+    if (!Array.isArray(annotations)) {
+      throw new Error(`Invalid SOP payload contract: steps[${stepIndex}].annotations must be an array.`);
+    }
+
+    annotations.forEach((annotation, annotationIndex) => {
+      if (!isRecord(annotation)) {
+        throw new Error(
+          `Invalid SOP payload contract: steps[${stepIndex}].annotations[${annotationIndex}] must be an object.`
+        );
+      }
+      if (annotation.type !== "highlight" && annotation.type !== "redact") {
+        throw new Error(
+          `Invalid SOP payload contract: steps[${stepIndex}].annotations[${annotationIndex}].type must be "highlight" or "redact".`
+        );
+      }
+    });
+  });
 }
 

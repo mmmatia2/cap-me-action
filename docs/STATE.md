@@ -46,6 +46,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - React app provides explicit not-found guidance when deep-linked session IDs cannot be resolved.
   - React app and content script now include `TEAM_SYNC_PROTOCOL_VERSION` on team-library bridge requests/responses and backend queries.
   - Annotation `type` (`highlight`/`redact`) survives app normalization and migration/export roundtrips.
+  - Editor ingestion paths now enforce runtime SOP payload contract validation before migration (supported `schemaVersion`, required top-level `session`/`steps`, and strict annotation `type`), failing with explicit user-visible errors on invalid payloads.
   - HTML export renders redactions as opaque masks and reports redaction counts separately from highlights.
   - React app uses schema-aware migration helpers (`contracts.ts`, `migrations.ts`) for import/export compatibility.
   - React app supports a dual source model (`Local` extension + `Team` Apps Script endpoint scaffold) while keeping the existing local bridge path.

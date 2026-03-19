@@ -1190,27 +1190,36 @@ export default function App() {
       return false;
     }
 
-    const steps = stepsPool
-      .filter((x) => x.sessionId === session.id)
-      .sort((a, b) => (a.stepIndex ?? 0) - (b.stepIndex ?? 0) || (a.at ?? 0) - (b.at ?? 0));
-    const migrated = migrateSessionPayload({
-      schemaVersion: APP_SCHEMA_VERSION,
-      exportedAt: Date.now(),
-      session,
-      steps,
-      meta: {
-        capturedBy: "extension-local",
-        appVersion: "0.0.0",
-        syncRevision: session.sync?.revision ?? 1
-      }
-    });
-    const normalized = normalizePayload(migrated);
-    setPayload(normalized);
-    setSelectedId(normalized.steps[0]?.id || null);
-    setError("");
-    setExtensionStatus(`Imported session ${session.id} (${steps.length} steps).`);
-    setSelectedExtensionSessionId(session.id);
-    return true;
+    try {
+      const steps = stepsPool
+        .filter((x) => x.sessionId === session.id)
+        .sort((a, b) => (a.stepIndex ?? 0) - (b.stepIndex ?? 0) || (a.at ?? 0) - (b.at ?? 0));
+      const migrated = migrateSessionPayload({
+        schemaVersion: APP_SCHEMA_VERSION,
+        exportedAt: Date.now(),
+        session,
+        steps,
+        meta: {
+          capturedBy: "extension-local",
+          appVersion: "0.0.0",
+          syncRevision: session.sync?.revision ?? 1
+        }
+      });
+      const normalized = normalizePayload(migrated);
+      setPayload(normalized);
+      setSelectedId(normalized.steps[0]?.id || null);
+      setError("");
+      setExtensionStatus(`Imported session ${session.id} (${steps.length} steps).`);
+      setSelectedExtensionSessionId(session.id);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Invalid extension payload.";
+      setPayload(null);
+      setSelectedId(null);
+      setError(message);
+      setExtensionStatus(`Extension import failed: ${message}`);
+      return false;
+    }
   }
 
   function importSelectedExtensionSession() {
@@ -1314,6 +1323,14 @@ export default function App() {
       setSelectedTeamSessionId(sessionId);
       return true;
     } catch (err) {
+      const message = err instanceof Error ? err.message : "unknown error";
+      if (message.toLowerCase().includes("invalid sop payload contract")) {
+        setPayload(null);
+        setSelectedId(null);
+        setError(message);
+        setTeamStatus(`Team import failed: ${message}`);
+        return false;
+      }
       const code = normalizeTeamAuthErrorCode(err instanceof Error ? err.message : "unknown error");
       if (code === "SESSION_NOT_FOUND") {
         setTeamStatus(options.notFoundMessage || `Requested team session ${sessionId} was not found.`);

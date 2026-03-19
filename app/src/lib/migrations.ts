@@ -1,6 +1,6 @@
 // Purpose: provide schema-aware migrations for session payload import/export in the editor.
 // Inputs: raw payloads from extension/local files. Outputs: normalized payloads on current schema version.
-import { APP_SCHEMA_VERSION, defaultSessionSync, withSessionSync } from "./contracts";
+import { APP_SCHEMA_VERSION, assertValidSessionPayloadContract, defaultSessionSync, withSessionSync } from "./contracts";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -49,12 +49,7 @@ function normalizeAnnotation(raw: unknown, idx: number) {
 }
 
 export function migrateSessionPayload(raw: unknown) {
-  if (!isObject(raw)) {
-    throw new Error("Invalid payload object.");
-  }
-  if (!isObject(raw.session) || !Array.isArray(raw.steps)) {
-    throw new Error("Expected payload shape: { session: {...}, steps: [...] }");
-  }
+  assertValidSessionPayloadContract(raw);
 
   const session = withSessionSync({
     ...raw.session,
@@ -102,12 +97,19 @@ export function migrateSessionPayload(raw: unknown) {
 }
 
 export function buildSessionExport(payload: {
+  schemaVersion?: string;
   session: Record<string, unknown>;
   steps: Array<Record<string, unknown>>;
   exportedAt?: number;
   meta?: Record<string, unknown>;
 }) {
-  const migrated = migrateSessionPayload(payload);
+  const migrated = migrateSessionPayload({
+    schemaVersion: payload.schemaVersion ?? APP_SCHEMA_VERSION,
+    exportedAt: payload.exportedAt,
+    session: payload.session,
+    steps: payload.steps,
+    meta: payload.meta
+  });
   return {
     schemaVersion: APP_SCHEMA_VERSION,
     exportedAt: payload.exportedAt ?? Date.now(),

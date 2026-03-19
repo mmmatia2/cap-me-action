@@ -64,13 +64,51 @@ assert.equal(built.steps[0].annotations[1].type, "redact", "redact annotation sh
 
 // Validate roundtrip of minimal payload with missing fields
 const minimal = {
+  schemaVersion: APP_SCHEMA_VERSION,
   session: { id: "sess_min" },
-  steps: [{ id: "step_min", sessionId: "sess_min", type: "unknown", annotations: [{ x: 0.5, y: 0.5, width: 0.2, height: 0.2 }] }],
+  steps: [
+    {
+      id: "step_min",
+      sessionId: "sess_min",
+      type: "unknown",
+      annotations: [{ x: 0.5, y: 0.5, width: 0.2, height: 0.2, type: "highlight" }]
+    }
+  ],
   meta: {}
 };
 const migratedMinimal = migrateSessionPayload(minimal);
 const exportedMinimal = buildSessionExport(minimal);
 validateExportShape(exportedMinimal);
-assert.equal(migratedMinimal.steps[0].annotations[0]?.type, "highlight", "default annotation type should normalize to highlight");
+assert.equal(migratedMinimal.steps[0].annotations[0]?.type, "highlight", "annotation type should persist through migration");
+
+assert.throws(
+  () =>
+    migrateSessionPayload({
+      session: { id: "sess_missing_schema" },
+      steps: [],
+      meta: {}
+    } as any),
+  /schemaVersion is required/i,
+  "missing schemaVersion should fail contract validation"
+);
+
+assert.throws(
+  () =>
+    migrateSessionPayload({
+      schemaVersion: APP_SCHEMA_VERSION,
+      session: { id: "sess_invalid_ann" },
+      steps: [
+        {
+          id: "step_invalid_ann",
+          sessionId: "sess_invalid_ann",
+          type: "click",
+          annotations: [{ id: "ann_bad", x: 0.1, y: 0.1, width: 0.2, height: 0.2, type: "mask" }]
+        }
+      ],
+      meta: {}
+    }),
+  /annotations\[0\]\.type must be "highlight" or "redact"/i,
+  "invalid annotation type should fail contract validation"
+);
 
 console.log("export-contract: ok");
