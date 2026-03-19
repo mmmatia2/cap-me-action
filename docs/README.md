@@ -10,6 +10,7 @@ It is intentionally lightweight and optimized for fast iteration without drift.
   - `docs/CONTEXT_MESH_LIGHT.md`: active Architect/Executor operating model and documentation workflow rules.
   - `docs/CHANGELOG.md`: release-level user-visible changes.
   - `docs/team-library-protocol.md`: current team-library contract.
+  - `docs/export-schema.json`: canonical SOP export JSON schema.
   - `docs/adr/`: accepted architecture decisions. `docs/adr/README.md` and `docs/adr/0000-template.md` are helpers, not runtime truth.
 - Supporting runbooks/checklists:
   - `docs/TEAM_SYNC_APPS_SCRIPT.md`
@@ -38,3 +39,18 @@ CI enforces this with `scripts/check-doc-sync.mjs`.
 
 - `pnpm docs:check`: verify code changes are paired with documentation updates.
 - `pnpm docs:bundle`: generate a shareable active-context bundle at `docs/context-bundle.md`.
+
+## Local Smoke Start (No Team Auth)
+
+Use this path to smoke-test the SOP editor locally without real team-library auth.
+
+1. Install dependencies: `pnpm install`
+2. Start the editor app: `pnpm dev:app`
+3. Open `http://localhost:5173/?sample=1` to auto-load the bundled sample session.
+4. Alternative: open `http://localhost:5173/` and click `Load Sample SOP` in the import card.
+
+Smoke sample source: `app/public/samples/local-smoke-session.json`
+
+Auth boundary:
+- Not required for this smoke path: team-library sign-in, Apps Script deployment, remote sync.
+- Still required for team flows: `Load Team Sessions`, `Import Team Session`, and any live sync/auth validation.

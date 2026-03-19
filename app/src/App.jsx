@@ -745,6 +745,15 @@ export default function App() {
     void run();
   }, [handoff, teamApiBase]);
 
+  function applyImportedPayload(parsed) {
+    const migrated = migrateSessionPayload(parsed);
+    const normalized = normalizePayload(migrated);
+    setPayload(normalized);
+    setSelectedId(normalized.steps[0]?.id || null);
+    setError("");
+    return normalized;
+  }
+
   function onFileSelected(event) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -755,11 +764,7 @@ export default function App() {
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result || "{}"));
-        const migrated = migrateSessionPayload(parsed);
-        const normalized = normalizePayload(migrated);
-        setPayload(normalized);
-        setSelectedId(normalized.steps[0]?.id || null);
-        setError("");
+        applyImportedPayload(parsed);
       } catch (err) {
         setPayload(null);
         setSelectedId(null);
@@ -768,6 +773,34 @@ export default function App() {
     };
     reader.readAsText(file);
   }
+
+  async function loadBundledSample() {
+    try {
+      const response = await fetch("/samples/local-smoke-session.json", { method: "GET" });
+      if (!response.ok) {
+        throw new Error(`Sample file unavailable (HTTP_${response.status})`);
+      }
+      const parsed = await response.json();
+      const normalized = applyImportedPayload(parsed);
+      setDataSource("local");
+      setExtensionStatus(`Loaded bundled sample ${normalized.session.id}.`);
+    } catch (err) {
+      setPayload(null);
+      setSelectedId(null);
+      setError(err instanceof Error ? err.message : "Failed to load bundled sample.");
+    }
+  }
+
+  useEffect(() => {
+    if (handoff.sessionId || payload) {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search || "");
+    const sample = normalizeText(params.get("sample")).toLowerCase();
+    if (sample === "1" || sample === "true") {
+      void loadBundledSample();
+    }
+  }, [handoff.sessionId, payload]);
 
   function patchStep(stepId, patchFn) {
     setPayload((prev) => {
@@ -1367,6 +1400,14 @@ export default function App() {
                   >
                     <MonitorSmartphone size={16} />
                     Load From Extension
+                  </button>
+                  <button
+                    type="button"
+                    onClick={loadBundledSample}
+                    className="px-4 py-2 bg-surface text-text border border-border rounded-lg hover:bg-surface-2 font-medium text-sm transition-colors flex items-center gap-2"
+                  >
+                    <FileJson size={16} />
+                    Load Sample SOP
                   </button>
                   <select
                     value={selectedExtensionSessionId}

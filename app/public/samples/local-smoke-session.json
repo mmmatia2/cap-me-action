@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "1.1.0",
+  "exportedAt": 1760000000000,
+  "session": {
+    "id": "sess_local_smoke_001",
+    "tabId": 1,
+    "startUrl": "https://backoffice.example.local/start",
+    "startTitle": "Backoffice Dashboard",
+    "lastUrl": "https://backoffice.example.local/requests/42",
+    "lastTitle": "Request 42",
+    "startedAt": 1759999999000,
+    "updatedAt": 1760000000000,
+    "stepsCount": 3,
+    "sync": {
+      "status": "local",
+      "revision": 1,
+      "lastSyncedAt": null,
+      "errorCode": null
+    }
+  },
+  "steps": [
+    {
+      "id": "step_1",
+      "sessionId": "sess_local_smoke_001",
+      "stepIndex": 1,
+      "type": "navigate",
+      "url": "https://backoffice.example.local/start",
+      "pageTitle": "Backoffice Dashboard",
+      "at": 1759999999200,
+      "title": "Open the backoffice dashboard",
+      "instruction": "Navigate to the internal backoffice dashboard.",
+      "note": "Use this sample to smoke-test local editing and export.",
+      "annotations": []
+    },
+    {
+      "id": "step_2",
+      "sessionId": "sess_local_smoke_001",
+      "stepIndex": 2,
+      "type": "click",
+      "url": "https://backoffice.example.local/start",
+      "pageTitle": "Backoffice Dashboard",
+      "at": 1759999999500,
+      "title": "Open pending requests",
+      "instruction": "Click the Pending Requests card.",
+      "note": "",
+      "target": {
+        "tag": "button",
+        "label": "Pending Requests"
+      },
+      "selectors": {
+        "css": "button[data-testid=\"pending-requests\"]"
+      },
+      "annotations": [
+        {
+          "id": "ann_1",
+          "x": 0.58,
+          "y": 0.24,
+          "width": 0.2,
+          "height": 0.1,
+          "label": "Open pending queue",
+          "type": "highlight"
+        }
+      ]
+    },
+    {
+      "id": "step_3",
+      "sessionId": "sess_local_smoke_001",
+      "stepIndex": 3,
+      "type": "input",
+      "url": "https://backoffice.example.local/requests/42",
+      "pageTitle": "Request 42",
+      "at": 1760000000000,
+      "title": "Add internal comment",
+      "instruction": "Type a short internal note in the comment box.",
+      "note": "Example redaction box included for smoke testing export behavior.",
+      "value": "Please verify billing details before approval.",
+      "inputType": "text",
+      "target": {
+        "tag": "textarea",
+        "label": "Internal Comment"
+      },
+      "selectors": {
+        "css": "textarea[name=\"internal-comment\"]"
+      },
+      "annotations": [
+        {
+          "id": "ann_2",
+          "x": 0.18,
+          "y": 0.52,
+          "width": 0.44,
+          "height": 0.14,
+          "label": "",
+          "type": "redact"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "capturedBy": "local-smoke-sample",
+    "appVersion": "0.0.0",
+    "syncRevision": 1
+  }
+}

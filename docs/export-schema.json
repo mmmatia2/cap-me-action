@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cap-me-action.internal/schemas/export-schema.json",
+  "title": "Cap Me Action SOP Export",
+  "type": "object",
+  "required": ["schemaVersion", "session", "steps", "meta"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.1.0",
+      "description": "Export payload schema version."
+    },
+    "exportedAt": {
+      "type": "number",
+      "description": "Unix epoch ms when the export was produced."
+    },
+    "session": {
+      "type": "object",
+      "required": ["id", "stepsCount"],
+      "properties": {
+        "id": { "type": "string" },
+        "tabId": { "type": "number" },
+        "startUrl": { "type": "string" },
+        "startTitle": { "type": "string" },
+        "lastUrl": { "type": "string" },
+        "lastTitle": { "type": "string" },
+        "startedAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "stepsCount": { "type": "number" },
+        "sync": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["local", "pending", "synced", "failed", "blocked"]
+            },
+            "revision": { "type": ["number", "null"] },
+            "lastSyncedAt": { "type": ["number", "null"] },
+            "errorCode": { "type": ["string", "null"] }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "sessionId", "type", "stepIndex"],
+        "properties": {
+          "id": { "type": "string" },
+          "sessionId": { "type": "string" },
+          "stepIndex": { "type": "number" },
+          "type": { "type": "string" },
+          "url": { "type": "string" },
+          "pageTitle": { "type": "string" },
+          "at": { "type": "number" },
+          "selectors": { "type": "object", "additionalProperties": true },
+          "target": { "type": "object", "additionalProperties": true },
+          "thumbnailDataUrl": { "type": ["string", "null"] },
+          "annotations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "x", "y", "width", "height", "type"],
+              "properties": {
+                "id": { "type": "string" },
+                "x": { "type": "number", "minimum": 0, "maximum": 1 },
+                "y": { "type": "number", "minimum": 0, "maximum": 1 },
+                "width": { "type": "number", "minimum": 0, "maximum": 1 },
+                "height": { "type": "number", "minimum": 0, "maximum": 1 },
+                "label": { "type": "string" },
+                "type": { "type": "string", "enum": ["highlight", "redact"] }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "capturedBy": { "type": "string" },
+        "appVersion": { "type": "string" },
+        "syncRevision": { "type": "number" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

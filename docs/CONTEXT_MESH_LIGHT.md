@@ -13,6 +13,7 @@ This project uses a direct model-to-model Architect/Executor workflow so documen
 - Living state: `docs/STATE.md`
 - Release memory: `docs/CHANGELOG.md`
 - Active protocol contract: `docs/team-library-protocol.md`
+- SOP export schema: `docs/export-schema.json`
 - Decision memory: `docs/adr/*.md`
 
 ## Active Workflow Truth

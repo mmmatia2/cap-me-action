@@ -77,6 +77,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 
 - Current team sync protocol version: `1.0.0`
 - Canonical contract doc: `docs/team-library-protocol.md`
+- Canonical SOP export schema: `docs/export-schema.json`
 
 ## Data Model Snapshot
 
