@@ -7,6 +7,7 @@
     "build:app": "pnpm --filter app build",
     "docs:check": "node scripts/check-doc-sync.mjs",
     "docs:bundle": "node scripts/build-context-bundle.mjs",
+    "extension:check-syntax": "node scripts/check-extension-syntax.mjs",
     "test:contracts": "pnpm test:contracts:run",
     "test:contracts:run": "pnpm dlx tsx tests/export-contract.test.ts",
     "extension:set-oauth-client-id": "node scripts/set-extension-oauth-client-id.mjs"

@@ -9,6 +9,7 @@ const recentCaptureList = document.getElementById("recentCaptureList");
 const openInspector = document.getElementById("openInspector");
 const openInspectorFooter = document.getElementById("openInspectorFooter");
 const openEditor = document.getElementById("openEditor");
+const checkLocalEditor = document.getElementById("checkLocalEditor");
 const downloadLastJson = document.getElementById("downloadLastJson");
 
 function getStorage(keys) {
@@ -17,6 +18,18 @@ function getStorage(keys) {
 
 function sendRuntimeMessage(message) {
   return new Promise((resolve) => chrome.runtime.sendMessage(message, resolve));
+}
+
+async function checkLocalEditorReady() {
+  const response = await sendRuntimeMessage({ type: "CHECK_LOCAL_EDITOR_READY" });
+  if (response?.ok) {
+    const suffix = response.httpStatus ? ` (HTTP ${response.httpStatus})` : "";
+    return `Local editor is reachable at ${response.url}${suffix}.`;
+  }
+  if (response?.status === "timeout") {
+    return "Local editor check timed out. Start or restart `pnpm dev:app`.";
+  }
+  return "Local editor is unreachable. Start `pnpm dev:app` and try again.";
 }
 
 function escapeHtml(value) {
@@ -210,6 +223,11 @@ async function handleRecentSessionOpen(sessionId) {
       : `Opened editor for ${sessionId}. If needed, run pnpm dev:app locally.`;
 }
 
+async function handleCheckLocalEditor() {
+  captureStatus.textContent = "Checking local editor...";
+  captureStatus.textContent = await checkLocalEditorReady();
+}
+
 captureToggle.addEventListener("click", () => {
   toggleCapture().catch(() => {
     captureStatus.textContent = "Failed to toggle capture mode.";
@@ -220,6 +238,11 @@ openInspectorFooter.addEventListener("click", openInspectorPage);
 openEditor.addEventListener("click", () => {
   handleOpenEditor().catch(() => {
     captureStatus.textContent = "Unable to open editor. Start the app with pnpm dev:app and try again.";
+  });
+});
+checkLocalEditor.addEventListener("click", () => {
+  handleCheckLocalEditor().catch(() => {
+    captureStatus.textContent = "Local editor check failed. Start the app with pnpm dev:app and try again.";
   });
 });
 downloadLastJson.addEventListener("click", () => {

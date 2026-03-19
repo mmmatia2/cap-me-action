@@ -44,6 +44,17 @@ function setSyncAccountText(email) {
   el.textContent = email ? `Account: ${email}` : "Account: not connected";
 }
 
+function getLocalEditorReadyText(response) {
+  if (response?.ok) {
+    const suffix = response.httpStatus ? ` (HTTP ${response.httpStatus})` : "";
+    return `Local editor is reachable at ${response.url}${suffix}.`;
+  }
+  if (response?.status === "timeout") {
+    return "Local editor check timed out. Start or restart `pnpm dev:app`.";
+  }
+  return "Local editor is unreachable. Start `pnpm dev:app` and try again.";
+}
+
 function normalizeSyncConfig(value) {
   const allowedRaw = Array.isArray(value?.allowedEmails) ? value.allowedEmails : [];
   return {
@@ -522,6 +533,13 @@ function openSelectedInEditor() {
   );
 }
 
+function checkLocalEditor() {
+  setStatusText("Checking local editor...");
+  chrome.runtime.sendMessage({ type: "CHECK_LOCAL_EDITOR_READY" }, (response) => {
+    setStatusText(getLocalEditorReadyText(response));
+  });
+}
+
 function markSyncConfigDirty() {
   syncConfigDirty = true;
   setSyncConfigStatusText("Unsaved sync settings.");
@@ -590,6 +608,7 @@ document.getElementById("sessionSelect").addEventListener("change", (event) => {
 document.getElementById("startCapture").addEventListener("click", () => setCaptureMode("START_CAPTURE"));
 document.getElementById("stopCapture").addEventListener("click", () => setCaptureMode("STOP_CAPTURE"));
 document.getElementById("refresh").addEventListener("click", refreshCaptureState);
+document.getElementById("checkLocalEditor").addEventListener("click", checkLocalEditor);
 document.getElementById("syncSelected").addEventListener("click", syncSelectedSession);
 document.getElementById("openEditor").addEventListener("click", openSelectedInEditor);
 document.getElementById("exportJson").addEventListener("click", exportSelectedSessionJson);

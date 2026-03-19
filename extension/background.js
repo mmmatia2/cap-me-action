@@ -97,8 +97,7 @@ function normalizeStep(step, idx) {
 }
 
 function normalizeSyncConfig(value) {
-  const rawEditorUrl = String(value?.editorUrl ?? DEFAULT_SYNC_CONFIG.editorUrl).trim();
-  const editorUrl = rawEditorUrl === LEGACY_HOSTED_EDITOR_URL ? LOCAL_EDITOR_URL : rawEditorUrl;
+  const editorUrl = getLocalEditorUrl(value?.editorUrl ?? DEFAULT_SYNC_CONFIG.editorUrl);
   return {
     ...DEFAULT_SYNC_CONFIG,
     ...(value ?? {}),
@@ -108,6 +107,14 @@ function normalizeSyncConfig(value) {
       ? value.allowedEmails.map((x) => String(x).trim().toLowerCase()).filter(Boolean)
       : []
   };
+}
+
+function getLocalEditorUrl(value) {
+  const rawEditorUrl = String(value ?? "").trim();
+  if (!rawEditorUrl || rawEditorUrl === LEGACY_HOSTED_EDITOR_URL) {
+    return LOCAL_EDITOR_URL;
+  }
+  return rawEditorUrl;
 }
 
 function normalizeStore(store) {
@@ -799,11 +806,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           ""
       ).trim();
       const source = String(message.payload?.source ?? "local").trim() || "local";
-      const rawEditorUrl = String(store.syncConfig?.editorUrl || "").trim();
-      const editorUrl =
-        !rawEditorUrl || rawEditorUrl === LEGACY_HOSTED_EDITOR_URL
-          ? LOCAL_EDITOR_URL
-          : rawEditorUrl;
+      const editorUrl = getLocalEditorUrl(store.syncConfig?.editorUrl);
       const normalized = editorUrl.endsWith("/") ? editorUrl.slice(0, -1) : editorUrl;
       const url =
         sessionId
@@ -818,6 +821,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: true, tabId: tab.id, url });
       });
       return;
+    }
+
+    if (message.type === "CHECK_LOCAL_EDITOR_READY") {
+      const editorUrl = getLocalEditorUrl(store.syncConfig?.editorUrl).replace(/\/$/, "");
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1500);
+      try {
+        const response = await fetch(`${editorUrl}/`, {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        sendResponse({
+          ok: true,
+          status: response.ok ? "reachable" : "reachable",
+          httpStatus: response.status,
+          url: editorUrl
+        });
+      } catch (error) {
+        clearTimeout(timeout);
+        const timedOut = controller.signal.aborted;
+        sendResponse({
+          ok: false,
+          status: timedOut ? "timeout" : "unreachable",
+          error: timedOut ? "Local editor readiness check timed out." : "Local editor is unreachable.",
+          url: editorUrl
+        });
+      }
+      return true;
     }
 
     if (message.type === "START_CAPTURE") {

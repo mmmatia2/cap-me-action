@@ -13,6 +13,7 @@
     "alarms"
   ],
   "host_permissions": [
+    "http://localhost/*",
     "https://script.google.com/*",
     "https://script.googleusercontent.com/*",
     "https://www.googleapis.com/*"

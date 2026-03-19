@@ -68,3 +68,4 @@ Use this as the primary no-auth product smoke path for real captured artifacts.
 Notes:
 - Default local editor handoff now targets `http://localhost:5173` for no-auth smoke runs.
 - If the editor tab does not load, verify `pnpm dev:app` is still running.
+- Popup and inspector both include `Check Local Editor` to confirm reachability before handoff.
