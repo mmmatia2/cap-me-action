@@ -59,6 +59,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - Popup and inspector include a local editor readiness preflight check so operators can confirm `http://localhost:5173` is reachable before handoff.
   - Local editor readiness now distinguishes healthy `200`, reachable-but-unhealthy non-`200`, unreachable, and timeout states in operator messaging.
   - Extension manifest includes localhost host permission for local readiness fetches, and repo now includes a narrow extension JS syntax guard (`pnpm extension:check-syntax`) to catch popup/script parse failures early.
+  - Extension identity is now repo-pinned via `manifest.key`, and OAuth helper tooling can derive/print the stable extension ID used for internal Chrome OAuth client setup.
   - Content script injects a floating recorder dock from `ui-floating-control/index.html` while capture is active, with live timer/step count and pause/finish controls.
   - Action popup uses local MV3-safe CSS/HTML (no remote Tailwind runtime), aligned to the intended visual direction while preserving existing capture/session wiring.
   - Floating dock has local CSS compact styling, per-tab step count via `GET_DOCK_STATE`, and working `Discard Last Step` action with in-dock feedback.
@@ -122,10 +123,12 @@ Latest recorded runtime validation evidence in `HEAD` conflicts with the repo-ba
 
 ## Operational Runbook
 
-- Team sync + OAuth setup and validation runbook: `docs/TEAM_SYNC_APPS_SCRIPT.md`
+- First-run internal OAuth/bootstrap runbook: `docs/internal-oauth-bootstrap.md`
+- Team sync + backend deployment runbook: `docs/TEAM_SYNC_APPS_SCRIPT.md`
 - Fresh setup checklist: `docs/team-library-fresh-setup.md`
 - Repo-backed Apps Script source: `backend/google-apps-script/team-library/`
 - Manifest OAuth helper command: `pnpm extension:set-oauth-client-id -- --client-id "<client-id>.apps.googleusercontent.com"`
+- Stable extension ID helper command: `pnpm extension:print-id`
 
 ## Historical Planning References
 

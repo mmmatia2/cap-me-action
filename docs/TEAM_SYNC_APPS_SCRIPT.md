@@ -9,6 +9,7 @@ This runbook is the production path for `CMA-005` and the canonical deployment g
 - Backend code: `backend/google-apps-script/team-library/Code.gs`
 - Backend manifest/scopes: `backend/google-apps-script/team-library/appsscript.json`
 - Backend notes: `backend/google-apps-script/team-library/README.md`
+- First-run OAuth/bootstrap runbook: `docs/internal-oauth-bootstrap.md`
 - Protocol contract: `docs/team-library-protocol.md`
 - Fresh setup checklist: `docs/team-library-fresh-setup.md`
 
@@ -80,52 +81,21 @@ Expected:
 
 If the request redirects to Google login, deployment access is not correctly set to `Anyone`.
 
-## Step 6: Get Chrome extension ID
+## Step 6: Complete first-run extension OAuth/bootstrap
 
-1. Open `chrome://extensions`.
-2. Enable `Developer mode`.
-3. Load this repo's `extension/` folder as unpacked.
-4. Copy the extension ID.
+Run the canonical first-run path:
 
-## Step 7: Create OAuth client ID (Google Cloud)
+- `docs/internal-oauth-bootstrap.md`
 
-1. Open `https://console.cloud.google.com`.
-2. Configure OAuth consent screen if not already configured.
-3. Add scopes used by the extension:
-   - `openid`
-   - `email`
-   - `profile`
-   - `https://www.googleapis.com/auth/drive.file`
-4. Add your team accounts as test users if the app is still in testing mode.
-5. Create `OAuth client ID`.
-6. Application type: `Chrome Extension`.
-7. Enter the extension ID from Step 6.
-8. Copy the generated client ID.
+This covers:
 
-## Step 8: Apply OAuth client ID to the extension
+- stable extension ID print/verification
+- Chrome Extension OAuth client creation/confirmation
+- manifest OAuth client application
+- extension load/reload
+- inspector endpoint + sign-in bootstrap
 
-Recommended:
-
-```bash
-pnpm extension:set-oauth-client-id -- --client-id "YOUR_CLIENT_ID.apps.googleusercontent.com"
-```
-
-Then reload the extension in `chrome://extensions`.
-
-## Step 9: Configure sync in inspector
-
-1. Open extension inspector.
-2. In `Sync Settings`:
-   - enable sync
-   - paste the `/exec` endpoint URL
-   - enable `Mask input values` unless you explicitly need raw inputs
-   - set `Auto upload on stop` as desired
-   - optionally add allow-list emails client-side
-3. Click `Save Sync Settings`.
-4. Click `Sign In` and approve account access.
-5. Treat the inspector sign-in result as the source of truth for team-library auth.
-
-## Step 10: Reproduce upload + list + load
+## Step 7: Reproduce upload + list + load
 
 Follow `docs/team-library-fresh-setup.md`.
 

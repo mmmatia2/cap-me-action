@@ -11,6 +11,7 @@ It is intentionally lightweight and optimized for fast iteration without drift.
   - `docs/CHANGELOG.md`: release-level user-visible changes.
   - `docs/team-library-protocol.md`: current team-library contract.
   - `docs/export-schema.json`: canonical SOP export JSON schema.
+  - `docs/internal-oauth-bootstrap.md`: canonical first-run internal OAuth/team-sync bootstrap path.
   - `docs/adr/`: accepted architecture decisions. `docs/adr/README.md` and `docs/adr/0000-template.md` are helpers, not runtime truth.
 - Supporting runbooks/checklists:
   - `docs/TEAM_SYNC_APPS_SCRIPT.md`
@@ -69,3 +70,4 @@ Notes:
 - Default local editor handoff now targets `http://localhost:5173` for no-auth smoke runs.
 - If the editor tab does not load, verify `pnpm dev:app` is still running.
 - Popup and inspector both include `Check Local Editor` to confirm reachability before handoff.
+- For first-run internal team sync bootstrap, use `docs/internal-oauth-bootstrap.md`.

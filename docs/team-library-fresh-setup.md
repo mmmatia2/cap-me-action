@@ -2,6 +2,8 @@
 
 Use this after a clean extension reload and a fresh web app refresh.
 
+First-run prerequisite: complete `docs/internal-oauth-bootstrap.md` once per environment.
+
 Purpose of this checklist:
 
 - verify the repo-backed Apps Script source is the deployed source
@@ -30,6 +32,8 @@ Purpose of this checklist:
    - `version.requestConventions` is present
 
 ## Extension
+
+Assumes first-run OAuth/bootstrap has already been completed.
 
 1. Reload unpacked extension in `chrome://extensions`.
 2. Open inspector tab.
