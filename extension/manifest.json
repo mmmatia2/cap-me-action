@@ -3,6 +3,7 @@
   "name": "Cap Me Action Recorder",
   "version": "0.0.1",
   "description": "MV3 scaffold for capturing browser actions.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAztpeihwtu5qJCFXaYqU2e7nnSEJFbdgSpgBd8sOdn0KVVTJKLbP7tzugfJFnNo6rSyZ+2pbFzBkHCw3QkYRFo2UHceKqA27wyG/38Z8Jq34MeK5lwgoybPnijxoV3/njq5editU4CobvJjs8YvImkr2GZPRHeZYpZnZtx62pwcD+WdOe47yNMN6tqjHCMZ9cSRKce0gnTWjs9lT9Ih0hr3Z/vuhyipbVLywKvU02tkluGmoTrOFhQGYsrKmnJD1o/TDGXWWecwhjfxmwJq5BJaKETrFjqZJ0bvJ7wEvRUbokzpyCrsN36/9hMZE4GVj0QcclJacVrh6VFJQsaaWj4QIDAQAB",
   "permissions": [
     "storage",
     "tabs",
