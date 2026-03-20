@@ -10,6 +10,13 @@ const DEFAULT_SYNC_CONFIG = {
 };
 let selectedSessionId = null;
 let syncConfigDirty = false;
+let localEditorProbe = { status: "unknown", url: "http://localhost:5173", checkedAt: null };
+let localEditorProbeInFlight = false;
+let readinessContext = {
+  syncConfig: { ...DEFAULT_SYNC_CONFIG },
+  selectedSession: null,
+  syncState: null
+};
 
 function renderJson(elementId, value) {
   document.getElementById(elementId).textContent = value ? JSON.stringify(value, null, 2) : "None";
@@ -56,6 +63,148 @@ function getLocalEditorReadyText(response) {
     return "Local editor check timed out. Start or restart `pnpm dev:app`.";
   }
   return "Local editor is unreachable. Start `pnpm dev:app` and try again.";
+}
+
+function setReadinessText(elementId, text) {
+  const el = document.getElementById(elementId);
+  if (el) {
+    el.textContent = text;
+  }
+}
+
+function formatSyncTime(ts) {
+  if (!Number.isFinite(ts) || ts <= 0) {
+    return null;
+  }
+  return new Date(ts).toLocaleString();
+}
+
+function getReadinessLocalEditorText() {
+  if (localEditorProbe.status === "healthy") {
+    return `Local editor: ready (${localEditorProbe.url}).`;
+  }
+  if (localEditorProbe.status === "reachable_unhealthy") {
+    const suffix = localEditorProbe.httpStatus ? ` HTTP ${localEditorProbe.httpStatus}.` : ".";
+    return `Local editor: reachable but unhealthy.${suffix} Start/restart app and verify it serves the editor.`;
+  }
+  if (localEditorProbe.status === "timeout") {
+    return "Local editor: timeout. Start/restart `pnpm dev:app`, then check again.";
+  }
+  if (localEditorProbe.status === "unreachable") {
+    return "Local editor: unreachable. Start `pnpm dev:app` before opening in editor.";
+  }
+  return "Local editor: not checked yet.";
+}
+
+function getReadinessEndpointText(syncConfig) {
+  if (!syncConfig.enabled) {
+    return "Endpoint: not required while team sync is disabled.";
+  }
+  if (!syncConfig.endpointUrl) {
+    return "Endpoint: missing. Add Apps Script endpoint URL in Sync Settings.";
+  }
+  return `Endpoint: configured (${syncConfig.endpointUrl}).`;
+}
+
+function getReadinessAuthText(syncConfig) {
+  if (syncConfig.accountEmail) {
+    return `Auth: signed in as ${syncConfig.accountEmail}.`;
+  }
+  if (!syncConfig.enabled) {
+    return "Auth: not required while team sync is disabled.";
+  }
+  return "Auth: not signed in. Use Sign In before team sync.";
+}
+
+function getReadinessSyncText(syncConfig, selectedSession, syncState) {
+  if (!selectedSession) {
+    if (!syncConfig.enabled) {
+      return "Sync: disabled (local-only mode).";
+    }
+    if (syncState?.lastErrorCode) {
+      return `Sync: last known background error ${syncState.lastErrorCode}.`;
+    }
+    return "Sync: no selected session. Capture or select one to inspect sync status.";
+  }
+
+  const sessionSync = selectedSession.sync ?? {};
+  const status = sessionSync.status ?? "local";
+
+  if (sessionSync.errorCode) {
+    return `Sync: selected session error ${sessionSync.errorCode}. Check endpoint/auth and retry.`;
+  }
+
+  if (status === "synced") {
+    const syncedAt = formatSyncTime(sessionSync.lastSyncedAt);
+    return syncedAt
+      ? `Sync: selected session synced at ${syncedAt}.`
+      : "Sync: selected session marked synced.";
+  }
+
+  if (status === "pending") {
+    return "Sync: selected session pending upload/retry.";
+  }
+
+  if (status === "failed") {
+    if (syncState?.lastErrorCode) {
+      return `Sync: selected session failed. Last background error ${syncState.lastErrorCode}.`;
+    }
+    return "Sync: selected session failed. Retry sync after checking settings.";
+  }
+
+  if (status === "blocked") {
+    return "Sync: selected session blocked by current sync settings.";
+  }
+
+  if (!syncConfig.enabled) {
+    return "Sync: local-only session (team sync disabled).";
+  }
+
+  if (!syncConfig.endpointUrl) {
+    return "Sync: endpoint missing. Configure endpoint to enable upload.";
+  }
+
+  if (syncState?.lastErrorCode) {
+    return `Sync: last known background error ${syncState.lastErrorCode}.`;
+  }
+
+  return "Sync: local/not uploaded yet.";
+}
+
+function renderReadinessSummary() {
+  const syncConfig = normalizeSyncConfig(readinessContext.syncConfig);
+  setReadinessText("readinessLocalEditor", getReadinessLocalEditorText());
+  setReadinessText("readinessEndpoint", getReadinessEndpointText(syncConfig));
+  setReadinessText("readinessAuth", getReadinessAuthText(syncConfig));
+  setReadinessText(
+    "readinessSync",
+    getReadinessSyncText(syncConfig, readinessContext.selectedSession, readinessContext.syncState)
+  );
+}
+
+function probeLocalEditorReadiness(options = {}) {
+  const now = Date.now();
+  if (localEditorProbeInFlight) {
+    return;
+  }
+  if (!options.force && localEditorProbe.checkedAt && now - localEditorProbe.checkedAt < 2000) {
+    return;
+  }
+
+  localEditorProbeInFlight = true;
+  chrome.runtime.sendMessage({ type: "CHECK_LOCAL_EDITOR_READY" }, (response) => {
+    localEditorProbeInFlight = false;
+    localEditorProbe = {
+      status: response?.status ?? "unreachable",
+      url: response?.url ?? localEditorProbe.url,
+      httpStatus: response?.httpStatus ?? null,
+      checkedAt: Date.now()
+    };
+    renderReadinessSummary();
+    if (options.announce) {
+      setStatusText(getLocalEditorReadyText(response));
+    }
+  });
 }
 
 function normalizeSyncConfig(value) {
@@ -291,7 +440,7 @@ function buildSessionExport(selectedSession, selectedSteps) {
 }
 
 function refreshCaptureState() {
-  chrome.storage.local.get(["captureState", "sessions", "steps", "syncConfig"], (result) => {
+  chrome.storage.local.get(["captureState", "sessions", "steps", "syncConfig", "syncState"], (result) => {
     const captureState = result.captureState ?? { isCapturing: false, startedAt: null };
     const sessions = result.sessions ?? [];
     const allSteps = result.steps ?? [];
@@ -317,6 +466,13 @@ function refreshCaptureState() {
     setSyncStatusText(`Sync status: ${syncLabel}${endpointReady ? "" : " (endpoint disabled)"}`);
     renderSyncConfigForm(syncConfig);
     setSyncAccountText(syncConfig.accountEmail ?? null);
+    readinessContext = {
+      syncConfig,
+      selectedSession,
+      syncState: result.syncState ?? null
+    };
+    renderReadinessSummary();
+    probeLocalEditorReadiness();
     setCaptureBadge(Boolean(captureState.isCapturing));
     renderJson("session", selectedSession);
     renderStepPreview(sessionSteps);
@@ -538,9 +694,7 @@ function openSelectedInEditor() {
 
 function checkLocalEditor() {
   setStatusText("Checking local editor...");
-  chrome.runtime.sendMessage({ type: "CHECK_LOCAL_EDITOR_READY" }, (response) => {
-    setStatusText(getLocalEditorReadyText(response));
-  });
+  probeLocalEditorReadiness({ force: true, announce: true });
 }
 
 function markSyncConfigDirty() {
