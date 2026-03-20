@@ -57,6 +57,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - Action popup includes direct "Open Last Capture In Editor" and "Download Last Capture JSON" actions, with hotkey copy aligned to actual shortcuts.
   - Extension `OPEN_EDITOR` local handoff defaults to `http://localhost:5173` for no-auth local smoke flow, including clearer popup/inspector guidance when local app startup is needed.
   - Popup and inspector include a local editor readiness preflight check so operators can confirm `http://localhost:5173` is reachable before handoff.
+  - Local editor readiness now distinguishes healthy `200`, reachable-but-unhealthy non-`200`, unreachable, and timeout states in operator messaging.
   - Extension manifest includes localhost host permission for local readiness fetches, and repo now includes a narrow extension JS syntax guard (`pnpm extension:check-syntax`) to catch popup/script parse failures early.
   - Content script injects a floating recorder dock from `ui-floating-control/index.html` while capture is active, with live timer/step count and pause/finish controls.
   - Action popup uses local MV3-safe CSS/HTML (no remote Tailwind runtime), aligned to the intended visual direction while preserving existing capture/session wiring.

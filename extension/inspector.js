@@ -45,9 +45,12 @@ function setSyncAccountText(email) {
 }
 
 function getLocalEditorReadyText(response) {
-  if (response?.ok) {
+  if (response?.status === "healthy") {
+    return `Local editor is healthy at ${response.url}.`;
+  }
+  if (response?.status === "reachable_unhealthy") {
     const suffix = response.httpStatus ? ` (HTTP ${response.httpStatus})` : "";
-    return `Local editor is reachable at ${response.url}${suffix}.`;
+    return `Local editor responded but is not healthy at ${response.url}${suffix}.`;
   }
   if (response?.status === "timeout") {
     return "Local editor check timed out. Start or restart `pnpm dev:app`.";

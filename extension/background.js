@@ -835,8 +835,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         clearTimeout(timeout);
         sendResponse({
-          ok: true,
-          status: response.ok ? "reachable" : "reachable",
+          ok: response.ok,
+          status: response.ok ? "healthy" : "reachable_unhealthy",
           httpStatus: response.status,
           url: editorUrl
         });
