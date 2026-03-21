@@ -126,6 +126,7 @@ Latest recorded runtime validation evidence in `HEAD` conflicts with the repo-ba
 
 ## Operational Runbook
 
+- Repo-root agent workflow contract: `AGENTS.md`
 - Canonical internal operator handoff runbook: `docs/internal-operator-handoff.md`
 - First-run internal OAuth/bootstrap runbook: `docs/internal-oauth-bootstrap.md`
 - Team sync + backend deployment runbook: `docs/TEAM_SYNC_APPS_SCRIPT.md`

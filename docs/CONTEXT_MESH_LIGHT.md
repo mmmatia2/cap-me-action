@@ -1,5 +1,8 @@
 # Documentation Operating Model
 
+Repo-root agent workflow and execution constraints now live in `AGENTS.md`.
+Use this file as supporting context for documentation cadence and canonical doc locations, not as a second competing source of repo workflow rules.
+
 This project uses a direct model-to-model Architect/Executor workflow so documentation stays aligned with implementation reality.
 
 ## Goals
