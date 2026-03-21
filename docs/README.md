@@ -41,6 +41,7 @@ CI enforces this with `scripts/check-doc-sync.mjs`.
 - `pnpm docs:check`: verify code changes are paired with documentation updates.
 - `pnpm docs:bundle`: generate a shareable active-context bundle at `docs/context-bundle.md`.
 - `pnpm extension:package`: create a versioned unpacked-extension artifact at `artifacts/extension/<extension-name>-v<manifest.version>/extension`.
+- `pnpm extension:verify-package`: verify the packaged artifact path, version, and expected extension ID before manual Chrome loading.
 
 ## Local Smoke Start (No Team Auth)
 
@@ -86,3 +87,5 @@ Use `pnpm extension:package` to build a versioned artifact folder for internal h
 This does not package or host the editor app. Operators still need either:
 - local app runtime (`pnpm dev:app`), or
 - a configured hosted editor URL in extension sync settings.
+
+It also does not automate Chrome installation. Use the verification command above, then load the packaged `extension/` folder manually in `chrome://extensions`.
