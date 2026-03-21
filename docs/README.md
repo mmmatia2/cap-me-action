@@ -71,3 +71,5 @@ Notes:
 - If the editor tab does not load, verify `pnpm dev:app` is still running.
 - Popup and inspector both include `Check Local Editor` to confirm reachability before handoff.
 - For first-run internal team sync bootstrap, use `docs/internal-oauth-bootstrap.md`.
+- Inspector readiness auth now reflects non-interactive token availability at check time (not only stored account email).
+- Inspector `Sign Out` now signs out team-sync access for this extension profile (best-effort token revoke + local auth gate), so readiness reports token unavailable until `Sign In`.

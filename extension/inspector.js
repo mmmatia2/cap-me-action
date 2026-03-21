@@ -12,6 +12,8 @@ let selectedSessionId = null;
 let syncConfigDirty = false;
 let localEditorProbe = { status: "unknown", url: "http://localhost:5173", checkedAt: null };
 let localEditorProbeInFlight = false;
+let authProbe = { status: "unknown", checkedAt: null, errorCode: null, accountEmail: null };
+let authProbeInFlight = false;
 let readinessContext = {
   syncConfig: { ...DEFAULT_SYNC_CONFIG },
   selectedSession: null,
@@ -107,13 +109,27 @@ function getReadinessEndpointText(syncConfig) {
 }
 
 function getReadinessAuthText(syncConfig) {
-  if (syncConfig.accountEmail) {
-    return `Auth: signed in as ${syncConfig.accountEmail}.`;
+  if (authProbe.status === "token_available") {
+    const email = authProbe.accountEmail || syncConfig.accountEmail;
+    return email ? `Auth: token available for ${email}.` : "Auth: token available.";
   }
-  if (!syncConfig.enabled) {
-    return "Auth: not required while team sync is disabled.";
+
+  if (authProbe.status === "token_unavailable") {
+    if (authProbe.errorCode === "AUTH_REQUIRED") {
+      return "Auth: signed out or token unavailable. Use Sign In before team sync.";
+    }
+    if (!syncConfig.enabled) {
+      return "Auth: token unavailable (team sync disabled).";
+    }
+    return "Auth: token unavailable. Use Sign In before team sync.";
   }
-  return "Auth: not signed in. Use Sign In before team sync.";
+
+  if (authProbe.status === "auth_check_failed") {
+    const suffix = authProbe.errorCode ? ` (${authProbe.errorCode})` : "";
+    return `Auth: check failed${suffix}. Verify extension identity/permissions.`;
+  }
+
+  return "Auth: checking token availability...";
 }
 
 function getReadinessSyncText(syncConfig, selectedSession, syncState) {
@@ -251,6 +267,46 @@ function probeLocalEditorReadiness(options = {}) {
     if (options.announce) {
       setStatusText(getLocalEditorReadyText(response));
     }
+  });
+}
+
+function probeAuthReadiness(options = {}) {
+  const now = Date.now();
+  if (authProbeInFlight) {
+    return;
+  }
+  if (!options.force && authProbe.checkedAt && now - authProbe.checkedAt < 2000) {
+    return;
+  }
+
+  authProbeInFlight = true;
+  chrome.runtime.sendMessage({ type: "CHECK_SYNC_AUTH_READY" }, (response) => {
+    authProbeInFlight = false;
+
+    if (response?.status === "token_available") {
+      authProbe = {
+        status: "token_available",
+        accountEmail: response?.accountEmail ?? null,
+        errorCode: null,
+        checkedAt: Date.now()
+      };
+    } else if (response?.status === "token_unavailable") {
+      authProbe = {
+        status: "token_unavailable",
+        accountEmail: null,
+        errorCode: response?.errorCode ?? null,
+        checkedAt: Date.now()
+      };
+    } else {
+      authProbe = {
+        status: "auth_check_failed",
+        accountEmail: null,
+        errorCode: response?.errorCode ?? "AUTH_CHECK_FAILED",
+        checkedAt: Date.now()
+      };
+    }
+
+    renderReadinessSummary();
   });
 }
 
@@ -520,6 +576,7 @@ function refreshCaptureState() {
     };
     renderReadinessSummary();
     probeLocalEditorReadiness();
+    probeAuthReadiness();
     setCaptureBadge(Boolean(captureState.isCapturing));
     renderJson("session", selectedSession);
     renderStepPreview(sessionSteps);
@@ -790,6 +847,7 @@ function signInForSync() {
     const email = response.accountEmail ?? null;
     setSyncConfigStatusText(email ? `Signed in as ${email}.` : "Signed in.");
     setSyncAccountText(email);
+    probeAuthReadiness({ force: true });
     refreshCaptureState();
   });
 }
@@ -800,8 +858,9 @@ function signOutForSync() {
       setSyncConfigStatusText(`Sign out failed: ${response?.errorCode ?? "unknown error"}`);
       return;
     }
-    setSyncConfigStatusText("Signed out.");
+    setSyncConfigStatusText("Signed out for team sync.");
     setSyncAccountText(null);
+    probeAuthReadiness({ force: true });
     refreshCaptureState();
   });
 }

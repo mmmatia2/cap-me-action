@@ -18,6 +18,7 @@ const DEFAULT_SYNC_CONFIG = {
   autoUploadOnStop: false,
   endpointUrl: "",
   editorUrl: LOCAL_EDITOR_URL,
+  authSignedOut: false,
   allowedEmails: [],
   maskInputValues: true
 };
@@ -103,6 +104,7 @@ function normalizeSyncConfig(value) {
     ...(value ?? {}),
     endpointUrl: String(value?.endpointUrl ?? DEFAULT_SYNC_CONFIG.endpointUrl).trim(),
     editorUrl,
+    authSignedOut: Boolean(value?.authSignedOut),
     allowedEmails: Array.isArray(value?.allowedEmails)
       ? value.allowedEmails.map((x) => String(x).trim().toLowerCase()).filter(Boolean)
       : []
@@ -249,6 +251,20 @@ async function fetchProfileEmail(token) {
   }
 }
 
+async function revokeToken(token) {
+  if (!token) {
+    return;
+  }
+  try {
+    await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+    });
+  } catch {
+    // Best-effort revoke only.
+  }
+}
+
 function createQueueItem(sessionId, reason = "manual") {
   return {
     id: makeId("sync"),
@@ -328,6 +344,9 @@ function buildSyncPayload(session, steps, capturedBy, syncRevision, maskInputVal
 async function uploadSessionToEndpoint(syncConfig, session, steps) {
   if (!syncConfig.enabled) {
     return { ok: false, errorCode: "SYNC_DISABLED" };
+  }
+  if (syncConfig.authSignedOut) {
+    return { ok: false, errorCode: "AUTH_REQUIRED" };
   }
   if (!syncConfig.endpointUrl) {
     return { ok: false, errorCode: "SYNC_ENDPOINT_MISSING" };
@@ -784,29 +803,90 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       const email = await fetchProfileEmail(tokenResult.token);
       store.syncConfig.accountEmail = email;
+      store.syncConfig.authSignedOut = false;
       await saveStore(store);
       sendResponse({ ok: true, accountEmail: email ?? null, protocolVersion: TEAM_SYNC_PROTOCOL_VERSION });
       return;
     }
 
     if (message.type === "AUTH_SIGN_OUT") {
+      if (chrome.identity?.clearAllCachedAuthTokens) {
+        await new Promise((resolve) => chrome.identity.clearAllCachedAuthTokens(() => resolve()));
+      } else {
+        const tokenResult = await getAuthToken(false);
+        if (tokenResult.ok) {
+          await removeCachedToken(tokenResult.token);
+        }
+      }
       const tokenResult = await getAuthToken(false);
       if (tokenResult.ok) {
+        await revokeToken(tokenResult.token);
         await removeCachedToken(tokenResult.token);
       }
       store.syncConfig.accountEmail = null;
+      store.syncConfig.authSignedOut = true;
       await saveStore(store);
       sendResponse({ ok: true, protocolVersion: TEAM_SYNC_PROTOCOL_VERSION });
       return;
     }
 
     if (message.type === "GET_SYNC_ACCESS_TOKEN") {
+      if (store.syncConfig.authSignedOut) {
+        sendResponse({
+          ok: false,
+          errorCode: "AUTH_REQUIRED",
+          error: "Signed out for team sync. Sign in again from the extension inspector."
+        });
+        return;
+      }
       const tokenResult = await getAuthToken(false);
       if (!tokenResult.ok) {
         sendResponse(tokenResult);
         return;
       }
       sendResponse({ ok: true, token: tokenResult.token, protocolVersion: TEAM_SYNC_PROTOCOL_VERSION });
+      return;
+    }
+
+    if (message.type === "CHECK_SYNC_AUTH_READY") {
+      if (store.syncConfig.authSignedOut) {
+        sendResponse({
+          ok: true,
+          status: "token_unavailable",
+          errorCode: "AUTH_REQUIRED",
+          protocolVersion: TEAM_SYNC_PROTOCOL_VERSION
+        });
+        return;
+      }
+      const tokenResult = await getAuthToken(false);
+      if (!tokenResult.ok) {
+        const code = String(tokenResult.errorCode ?? "AUTH_UNKNOWN");
+        if (code === "AUTH_REQUIRED" || code === "AUTH_DENIED") {
+          sendResponse({
+            ok: true,
+            status: "token_unavailable",
+            errorCode: code,
+            protocolVersion: TEAM_SYNC_PROTOCOL_VERSION
+          });
+          return;
+        }
+        sendResponse({
+          ok: false,
+          status: "auth_check_failed",
+          errorCode: code,
+          error: tokenResult.error ?? "Auth readiness check failed.",
+          protocolVersion: TEAM_SYNC_PROTOCOL_VERSION
+        });
+        return;
+      }
+
+      const email = await fetchProfileEmail(tokenResult.token);
+      sendResponse({
+        ok: true,
+        status: "token_available",
+        accountEmail: email ?? null,
+        protocolVersion: TEAM_SYNC_PROTOCOL_VERSION
+      });
       return;
     }
 
