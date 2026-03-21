@@ -444,24 +444,24 @@ function asHtml(payload) {
 function getPalette(theme) {
   if (theme === "light") {
     return {
-      bg: "#f7fafc",
+      bg: "#edf2f7",
       surface: "#ffffff",
-      surfaceAlt: "#f8fafc",
-      border: "#dbe4f0",
-      text: "#0f172a",
-      textSoft: "#475569",
-      accent: "#2563eb"
+      surfaceAlt: "#f5f8fb",
+      border: "#ccd6e2",
+      text: "#16202b",
+      textSoft: "#627487",
+      accent: "#24599b"
     };
   }
 
   return {
-    bg: "#0b1220",
-    surface: "#111b2e",
-    surfaceAlt: "#18253e",
-    border: "#243652",
-    text: "#e7edf7",
-    textSoft: "#9bb0cd",
-    accent: "#60a5fa"
+    bg: "#17212b",
+    surface: "#1d2935",
+    surfaceAlt: "#243240",
+    border: "#334759",
+    text: "#edf3f8",
+    textSoft: "#9fb0c0",
+    accent: "#78a6d8"
   };
 }
 
@@ -653,7 +653,7 @@ export default function App() {
   const [payload, setPayload] = useState(null);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState(null);
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState("light");
   const [extensionSessions, setExtensionSessions] = useState([]);
   const [extensionSteps, setExtensionSteps] = useState([]);
   const [selectedExtensionSessionId, setSelectedExtensionSessionId] = useState("");
@@ -1088,7 +1088,7 @@ export default function App() {
     if (!payload) return;
     try {
       const doc = new jsPDF();
-      const title = payload.session.lastTitle || payload.session.startTitle || "Scribe Clone Export";
+      const title = payload.session.lastTitle || payload.session.startTitle || "Cap Me Action Export";
       
       // Title
       doc.setFontSize(24);
@@ -1372,28 +1372,28 @@ export default function App() {
   }
 
   return (
-    <main className="min-h-screen bg-bg text-text font-sans flex flex-col">
-      <header className="sticky top-0 z-10 bg-surface border-b border-border shadow-sm px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-accent text-white flex items-center justify-center font-bold">
-            S
+    <main className="app-shell flex flex-col">
+      <header className="app-topbar">
+        <div className="app-topbar__brand">
+          <div className="app-topbar__mark">
+            CM
           </div>
           <div>
-            <h1 className="text-lg font-bold leading-tight m-0">Scribe Clone Editor</h1>
-            <p className="text-xs text-muted m-0">Organize, annotate, and export your captured workflows</p>
+            <h1 className="app-topbar__title">Cap Me Action Editor</h1>
+            <p className="app-topbar__subtitle">Review, refine, and export captured operating procedures.</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="app-toolbar">
           <button 
             type="button" 
             onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-            className="p-2 rounded-full text-muted hover:text-text hover:bg-surface-2 transition-colors"
+            className="app-button app-button--quiet"
             title="Toggle theme"
           >
             {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           
-          <div className="h-6 w-px bg-border mx-1" />
+          <div className="app-divider" />
 
           {payload && (
             <ExportPanel 
@@ -1409,22 +1409,31 @@ export default function App() {
 
       <div className="flex-1 flex flex-col overflow-hidden max-w-[1400px] w-full mx-auto px-6 py-6">
         {!payload && (
-          <div className="bg-surface border border-border rounded-xl p-6 mb-6 shadow-sm flex flex-col gap-5">
-            <h2 className="text-base font-semibold m-0 flex items-center gap-2">
-              <UploadCloud size={18} className="text-accent" />
-              Import Session
-            </h2>
+          <div className="import-shell mb-6">
+            <div className="import-shell__hero">
+              <div>
+                <p className="import-shell__eyebrow">Internal Workflow Editor</p>
+                <h2 className="import-shell__title">Load a captured session</h2>
+                <p className="import-shell__copy">
+                  Start from extension storage, the hosted team library, or a direct JSON import. The editor is tuned
+                  for internal procedure cleanup, not presentation polish.
+                </p>
+              </div>
+              <div className="import-shell__badge">
+                {dataSource === "local" ? "Local source" : "Team source"}
+              </div>
+            </div>
             
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="dataSource" className="text-xs font-semibold text-muted uppercase tracking-wider">
+            <div className="import-grid">
+              <div className="control-group">
+                <label htmlFor="dataSource" className="field-label">
                   Source
                 </label>
                 <select
                   id="dataSource"
                   value={dataSource}
                   onChange={(event) => setDataSource(event.target.value)}
-                  className="px-3 py-2 rounded-lg border border-border bg-surface-2 text-text focus:outline-none focus:border-accent min-w-[160px]"
+                  className="app-select min-w-[180px]"
                 >
                   <option value="local">Local (Extension)</option>
                   <option value="team">Team Library</option>
@@ -1432,11 +1441,11 @@ export default function App() {
               </div>
 
               {dataSource === "local" ? (
-                <div className="flex flex-wrap gap-3 items-end w-full">
+                <div className="import-grid import-grid--local w-full">
                   <button 
                     type="button" 
                     onClick={loadFromExtensionStorage} 
-                    className="px-4 py-2 bg-surface text-text border border-border rounded-lg hover:bg-surface-2 font-medium text-sm transition-colors flex items-center gap-2"
+                    className="app-button"
                   >
                     <MonitorSmartphone size={16} />
                     Load From Extension
@@ -1444,7 +1453,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={loadBundledSample}
-                    className="px-4 py-2 bg-surface text-text border border-border rounded-lg hover:bg-surface-2 font-medium text-sm transition-colors flex items-center gap-2"
+                    className="app-button"
                   >
                     <FileJson size={16} />
                     Load Sample SOP
@@ -1452,7 +1461,7 @@ export default function App() {
                   <select
                     value={selectedExtensionSessionId}
                     onChange={(event) => setSelectedExtensionSessionId(event.target.value)}
-                    className="px-3 py-2 rounded-lg border border-border bg-surface-2 text-text focus:outline-none focus:border-accent min-w-[280px]"
+                    className="app-select min-w-[300px]"
                     disabled={!extensionSessions.length}
                   >
                     {!extensionSessions.length ? (
@@ -1469,27 +1478,27 @@ export default function App() {
                     type="button" 
                     onClick={importSelectedExtensionSession} 
                     disabled={!selectedExtensionSessionId}
-                    className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition-colors"
+                    className="app-button app-button--primary"
                   >
                     Import Selected
                   </button>
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-3 items-end w-full">
-                  <div className="flex flex-col gap-1.5 flex-1 min-w-[240px]">
-                    <label className="text-xs font-semibold text-muted uppercase tracking-wider">Endpoint URL</label>
+                <div className="import-grid import-grid--team w-full">
+                  <div className="control-group flex-1 min-w-[240px]">
+                    <label className="field-label">Endpoint URL</label>
                     <input
                       type="text"
                       value={teamApiBase}
                       placeholder="Apps Script endpoint URL"
                       onChange={(event) => setTeamApiBase(event.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-surface-2 text-text focus:outline-none focus:border-accent"
+                      className="app-input"
                     />
                   </div>
                   <button 
                     type="button" 
                     onClick={loadFromTeamLibrary} 
-                    className="px-4 py-2 bg-surface text-text border border-border rounded-lg hover:bg-surface-2 font-medium text-sm transition-colors flex items-center gap-2"
+                    className="app-button"
                   >
                     <Cloud size={16} />
                     Load Library
@@ -1497,7 +1506,7 @@ export default function App() {
                   <select
                     value={selectedTeamSessionId}
                     onChange={(event) => setSelectedTeamSessionId(event.target.value)}
-                    className="px-3 py-2 rounded-lg border border-border bg-surface-2 text-text focus:outline-none focus:border-accent min-w-[240px]"
+                    className="app-select min-w-[260px]"
                     disabled={!teamSessions.length}
                   >
                     {!teamSessions.length ? (
@@ -1518,29 +1527,32 @@ export default function App() {
                     type="button" 
                     onClick={importSelectedTeamSession} 
                     disabled={!selectedTeamSessionId}
-                    className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition-colors"
+                    className="app-button app-button--primary"
                   >
                     Import Team Session
                   </button>
-                  <p className="m-0 text-xs text-muted max-w-[420px]">
-                    Team Library auth comes from the loaded extension via the page bridge. Sign in from the extension inspector if team access is unavailable.
-                  </p>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-4 pt-4 border-t border-border">
-              <span className="text-sm text-muted font-medium">Or upload JSON file directly:</span>
+            {dataSource === "team" && (
+              <p className="import-note">
+                Team Library auth comes from the loaded extension via the page bridge. Sign in from the extension inspector if team access is unavailable.
+              </p>
+            )}
+
+            <div className="import-footer">
+              <span className="import-footer__label">Direct JSON import</span>
               <input
                 type="file"
                 accept=".json,application/json"
                 onChange={onFileSelected}
-                className="text-sm text-muted file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-surface-2 file:text-text hover:file:bg-surface-2/80 cursor-pointer"
+                className="app-file-input"
               />
             </div>
             
             {(extensionStatus || teamStatus) && (
-              <p className="text-sm text-accent m-0 bg-accent/10 px-3 py-2 rounded-md border border-accent/20">
+              <p className="status-banner">
                 {dataSource === "local" ? extensionStatus : teamStatus}
               </p>
             )}
@@ -1548,7 +1560,7 @@ export default function App() {
         )}
 
         {error && (
-          <div className="mb-6 p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm font-medium flex items-center gap-2">
+          <div className="status-banner status-banner--error mb-6 flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-danger/20 flex items-center justify-center font-bold">!</span>
             {error}
           </div>

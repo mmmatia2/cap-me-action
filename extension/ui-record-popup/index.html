@@ -3,69 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Scribe Clone Recorder</title>
+    <title>Cap Me Action Recorder</title>
     <link rel="stylesheet" href="../shared-ui/tokens.css" />
     <style>
-      :root {
-        color-scheme: light dark;
-        --bg-color: #ffffff;
-        --surface-color: #f8fafc;
-        --border-color: #e2e8f0;
-        --text-main: #0f172a;
-        --text-muted: #64748b;
-        --accent: #4f46e5;
-        --accent-hover: #4338ca;
-        --danger: #ef4444;
-      }
-      
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg-color: #0b1220;
-          --surface-color: #111b2e;
-          --border-color: #1e293b;
-          --text-main: #f8fafc;
-          --text-muted: #94a3b8;
-          --accent: #6366f1;
-          --accent-hover: #4f46e5;
-        }
-      }
-
       * { box-sizing: border-box; }
 
       body {
         margin: 0;
-        width: 320px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        color: var(--text-main);
-        background: var(--bg-color);
+        width: 336px;
+        max-height: 600px;
+        overflow: hidden;
+        font-family: var(--font-sans);
+        color: var(--text);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(237, 242, 247, 0.92) 100%),
+          linear-gradient(135deg, rgba(36, 89, 155, 0.08) 0%, transparent 42%);
         font-size: 14px;
       }
 
       .popup {
         display: flex;
         flex-direction: column;
+        min-height: 0;
+        max-height: 600px;
       }
 
       .header {
         display: flex;
-        align-items: center;
-        padding: 16px;
-        border-bottom: 1px solid var(--border-color);
-        background: var(--bg-color);
+        align-items: flex-start;
+        gap: 12px;
+        padding: 18px 18px 14px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.82);
+        backdrop-filter: blur(10px);
       }
 
       .logo {
-        width: 28px;
-        height: 28px;
-        border-radius: 8px;
-        background: var(--accent);
-        color: white;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: linear-gradient(180deg, #f9fbfd 0%, #e9eef5 100%);
+        color: var(--accent-strong);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-weight: bold;
-        font-size: 16px;
-        margin-right: 12px;
+        font-weight: 700;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        flex-shrink: 0;
+        box-shadow: var(--shadow-sm);
       }
 
       .title-container {
@@ -74,113 +61,123 @@
 
       .title {
         margin: 0;
-        font-size: 15px;
-        font-weight: 600;
-        color: var(--text-main);
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text);
       }
 
       .subtitle {
-        margin: 2px 0 0 0;
+        margin: 4px 0 0 0;
         font-size: 12px;
-        color: var(--text-muted);
+        color: var(--muted);
+        line-height: 1.45;
       }
 
       .main-content {
-        padding: 16px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        flex: 1 1 auto;
+        overflow-y: auto;
+        overscroll-behavior: contain;
       }
 
       .capture-btn {
         width: 100%;
         padding: 16px;
-        border: none;
-        border-radius: 12px;
-        background: var(--accent);
+        border: 1px solid var(--accent);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
         color: white;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 600;
         cursor: pointer;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 8px;
-        transition: background-color 0.2s;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        gap: 10px;
+        text-align: center;
+        transition: background-color 0.2s ease, transform 0.2s ease;
+        box-shadow: var(--shadow-sm);
       }
 
       .capture-btn:hover {
-        background: var(--accent-hover);
+        background: linear-gradient(180deg, var(--accent-strong) 0%, #133a66 100%);
       }
 
       .capture-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 24px;
-        background: rgba(255, 255, 255, 0.2);
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        background: rgba(255, 255, 255, 0.12);
         display: flex;
         align-items: center;
         justify-content: center;
       }
 
       .capture-dot {
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
         background: white;
       }
 
       .capture-dot.recording {
-        border-radius: 4px;
-        background: #ef4444;
+        border-radius: 3px;
+        background: #fca5a5;
       }
 
       .status-text {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.9);
+        color: rgba(255, 255, 255, 0.88);
         margin: 0;
-        text-align: center;
         line-height: 1.4;
       }
 
       .actions-grid {
-        display: grid;
+        display: flex;
+        flex-direction: column;
         gap: 8px;
-        margin-top: 16px;
       }
 
       .action-btn {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 12px 16px;
-        background: var(--surface-color);
-        border: 1px solid var(--border-color);
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
         border-radius: 10px;
-        color: var(--text-main);
+        color: var(--text);
         font-size: 13px;
-        font-weight: 500;
+        font-weight: 600;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
         text-decoration: none;
+        box-shadow: var(--shadow-sm);
       }
 
       .action-btn:hover {
-        border-color: var(--accent);
-        background: var(--bg-color);
+        border-color: var(--border-strong);
+        background: var(--surface-2);
       }
 
       .section-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin: 20px 0 12px;
+        margin: 4px 0 0;
       }
 
       .section-title {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.08em;
         margin: 0;
       }
 
@@ -189,42 +186,46 @@
         border: none;
         color: var(--accent);
         font-size: 12px;
-        font-weight: 500;
+        font-weight: 600;
         cursor: pointer;
         padding: 0;
-      }
-
-      .view-all:hover {
-        text-decoration: underline;
       }
 
       .recent-list {
         display: flex;
         flex-direction: column;
         gap: 8px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+        overflow: visible;
       }
 
       .recent-item {
         display: flex;
         align-items: center;
         gap: 12px;
-        padding: 10px;
-        background: var(--surface-color);
-        border: 1px solid var(--border-color);
+        padding: 10px 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
         border-radius: 10px;
         cursor: pointer;
-        transition: border-color 0.2s;
+        transition: border-color 0.2s ease, background-color 0.2s ease;
       }
 
       .recent-item:hover {
-        border-color: var(--accent);
+        border-color: var(--border-strong);
+        background: var(--surface-2);
       }
 
       .recent-thumb {
         width: 40px;
         height: 40px;
-        border-radius: 6px;
-        background: var(--border-color);
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--surface-3);
         background-size: cover;
         background-position: center;
         flex-shrink: 0;
@@ -238,8 +239,8 @@
       .recent-title {
         margin: 0;
         font-size: 13px;
-        font-weight: 500;
-        color: var(--text-main);
+        font-weight: 600;
+        color: var(--text);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -248,41 +249,51 @@
       .recent-meta {
         margin: 2px 0 0;
         font-size: 11px;
-        color: var(--text-muted);
+        color: var(--muted);
       }
 
-      .empty-state {
-        padding: 24px 16px;
+      .empty-state,
+      .empty {
+        padding: 20px 14px;
         text-align: center;
-        background: var(--surface-color);
-        border: 1px dashed var(--border-color);
+        background: var(--surface-2);
+        border: 1px dashed var(--border);
         border-radius: 10px;
-        color: var(--text-muted);
+        color: var(--muted);
         font-size: 12px;
         line-height: 1.5;
         margin: 0;
       }
 
       .footer {
-        padding: 12px 16px;
-        border-top: 1px solid var(--border-color);
+        padding: 12px 18px 16px;
+        border-top: 1px solid var(--border);
         display: flex;
         justify-content: space-between;
-        background: var(--surface-color);
+        align-items: center;
+        background: rgba(255, 255, 255, 0.76);
+        flex-shrink: 0;
       }
 
       .footer-btn {
         background: none;
         border: none;
-        color: var(--text-muted);
+        color: var(--muted);
         font-size: 12px;
-        font-weight: 500;
+        font-weight: 600;
         cursor: pointer;
         padding: 0;
       }
 
       .footer-btn:hover {
-        color: var(--text-main);
+        color: var(--text);
+      }
+
+      .footer-note {
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
       }
 
       .keyboard-hints {
@@ -296,7 +307,8 @@
         font-size: 10px;
         padding: 2px 4px;
         border-radius: 4px;
-        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.12);
         color: white;
       }
     </style>
@@ -304,10 +316,10 @@
   <body>
     <div class="popup">
       <header class="header">
-        <div class="logo">S</div>
+        <div class="logo">CM</div>
         <div class="title-container">
-          <h1 class="title">Scribe Clone</h1>
-          <p class="subtitle">Capture your workflow</p>
+          <h1 class="title">Cap Me Action</h1>
+          <p class="subtitle">Operational capture and editor handoff for internal workflows.</p>
         </div>
       </header>
 
@@ -350,7 +362,7 @@
 
       <footer class="footer">
         <button id="openInspectorFooter" class="footer-btn" type="button">Settings</button>
-        <button class="footer-btn" style="color: var(--accent)">Dashboard &rarr;</button>
+        <span class="footer-note">Hosted editor default</span>
       </footer>
     </div>
 

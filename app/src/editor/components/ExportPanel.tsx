@@ -18,7 +18,7 @@ export function ExportPanel({ disabled, onJson, onMarkdown, onHtml, onPdf }: Exp
         type="button" 
         onClick={onJson} 
         disabled={disabled}
-        className="flex items-center gap-1.5 px-4 py-2 bg-surface text-text border border-border rounded-lg hover:bg-surface-2 hover:border-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm shadow-sm"
+        className="app-button"
       >
         <FileJson size={16} />
         Export JSON
@@ -27,7 +27,7 @@ export function ExportPanel({ disabled, onJson, onMarkdown, onHtml, onPdf }: Exp
         type="button" 
         onClick={onMarkdown} 
         disabled={disabled}
-        className="flex items-center gap-1.5 px-4 py-2 bg-surface text-text border border-border rounded-lg hover:bg-surface-2 hover:border-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm shadow-sm"
+        className="app-button"
       >
         <FileText size={16} />
         Export Markdown
@@ -36,7 +36,7 @@ export function ExportPanel({ disabled, onJson, onMarkdown, onHtml, onPdf }: Exp
         type="button" 
         onClick={onHtml} 
         disabled={disabled}
-        className="flex items-center gap-1.5 px-4 py-2 bg-surface text-text border border-border rounded-lg hover:bg-surface-2 hover:border-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm shadow-sm"
+        className="app-button"
       >
         <FileCode2 size={16} />
         Export HTML
@@ -45,7 +45,7 @@ export function ExportPanel({ disabled, onJson, onMarkdown, onHtml, onPdf }: Exp
         type="button" 
         onClick={onPdf} 
         disabled={disabled}
-        className="flex items-center gap-1.5 px-4 py-2 bg-accent text-white border border-transparent rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm shadow-sm"
+        className="app-button app-button--primary"
       >
         <File size={16} />
         Export PDF
