@@ -55,8 +55,8 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - Content script supports recorder hotkeys: `Alt+Shift+R` (start/stop), `Alt+Shift+Z` (discard last), `Alt+Shift+M` (dock minimize).
   - Action popup points to `ui-record-popup/index.html` with working start/stop capture and recent-session summaries, plus links to open the advanced inspector view.
   - Action popup includes direct "Open Last Capture In Editor" and "Download Last Capture JSON" actions, with hotkey copy aligned to actual shortcuts.
-  - Extension `OPEN_EDITOR` local handoff defaults to `http://localhost:5173` for no-auth local smoke flow, including clearer popup/inspector guidance when local app startup is needed.
-  - Popup and inspector include a local editor readiness preflight check so operators can confirm `http://localhost:5173` is reachable before handoff.
+  - Extension `OPEN_EDITOR` now defaults to hosted editor (`https://cap-me-action.vercel.app`) for operator flow; localhost remains an explicit developer override via Inspector `Sync Settings -> Editor URL`.
+  - Popup and inspector include a local editor readiness preflight check so developers can confirm `http://localhost:5173` before using localhost override.
   - Local editor readiness now distinguishes healthy `200`, reachable-but-unhealthy non-`200`, unreachable, and timeout states in operator messaging.
   - Extension manifest includes localhost host permission for local readiness fetches, and repo now includes a narrow extension JS syntax guard (`pnpm extension:check-syntax`) to catch popup/script parse failures early.
   - Extension identity is now repo-pinned via `manifest.key`, and OAuth helper tooling can derive/print the stable extension ID used for internal Chrome OAuth client setup.
@@ -80,7 +80,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
 - `SYNC_LAST_SESSION`: `{}`
 - `GET_SYNC_STATUS`: `{ sessionId?: string }`
 - `GET_SYNC_ACCESS_TOKEN`: `{}`
-- `OPEN_EDITOR`: `{ source?: "local" | "team", sessionId?: string }`
+- `OPEN_EDITOR`: `{ source?: string, sessionId?: string }`
 
 ## Team-Library Protocol
 

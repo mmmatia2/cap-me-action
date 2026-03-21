@@ -43,6 +43,20 @@ CI enforces this with `scripts/check-doc-sync.mjs`.
 - `pnpm extension:package`: create a versioned unpacked-extension artifact at `artifacts/extension/<extension-name>-v<manifest.version>/extension`.
 - `pnpm extension:verify-package`: verify the packaged artifact path, version, and expected extension ID before manual Chrome loading.
 
+## Operator Baseline (Hosted Editor)
+
+Default operator path uses the hosted editor URL:
+
+- `https://cap-me-action.vercel.app`
+
+Expected operator flow:
+
+1. Build and hand off packaged extension artifact (`pnpm extension:package`).
+2. Operator loads packaged `extension/` folder in `chrome://extensions`.
+3. Extension handoff opens hosted editor by default.
+
+This avoids requiring local app startup for standard internal operator usage.
+
 ## Local Smoke Start (No Team Auth)
 
 Use this path to smoke-test the SOP editor locally without real team-library auth.
@@ -69,8 +83,9 @@ Use this as the primary no-auth product smoke path for real captured artifacts.
 5. In the editor, confirm local session import, edit one step, then export JSON/Markdown/HTML.
 
 Notes:
-- Default local editor handoff now targets `http://localhost:5173` for no-auth smoke runs.
-- If the editor tab does not load, verify `pnpm dev:app` is still running.
+- Default editor handoff uses hosted editor.
+- Localhost remains supported as an explicit developer override by setting Inspector `Sync Settings -> Editor URL` to `http://localhost:5173`.
+- If using localhost override and the editor tab does not load, verify `pnpm dev:app` is still running.
 - Popup and inspector both include `Check Local Editor` to confirm reachability before handoff.
 - For first-run internal team sync bootstrap, use `docs/internal-oauth-bootstrap.md`.
 - Inspector readiness auth now reflects non-interactive token availability at check time (not only stored account email).

@@ -3,8 +3,8 @@
 const STORAGE_VERSION = 2;
 const APP_SCHEMA_VERSION = "1.1.0";
 const TEAM_SYNC_PROTOCOL_VERSION = "1.0.0";
+const HOSTED_EDITOR_URL = "https://cap-me-action.vercel.app";
 const LOCAL_EDITOR_URL = "http://localhost:5173";
-const LEGACY_HOSTED_EDITOR_URL = "https://cap-me-action.vercel.app";
 const SYNC_ALARM_NAME = "capme-sync-tick";
 const MAX_SESSIONS = 20;
 const MAX_STEPS = 500;
@@ -17,7 +17,7 @@ const DEFAULT_SYNC_CONFIG = {
   enabled: false,
   autoUploadOnStop: false,
   endpointUrl: "",
-  editorUrl: LOCAL_EDITOR_URL,
+  editorUrl: HOSTED_EDITOR_URL,
   authSignedOut: false,
   allowedEmails: [],
   maskInputValues: true
@@ -98,7 +98,7 @@ function normalizeStep(step, idx) {
 }
 
 function normalizeSyncConfig(value) {
-  const editorUrl = getLocalEditorUrl(value?.editorUrl ?? DEFAULT_SYNC_CONFIG.editorUrl);
+  const editorUrl = normalizeEditorUrl(value?.editorUrl ?? DEFAULT_SYNC_CONFIG.editorUrl);
   return {
     ...DEFAULT_SYNC_CONFIG,
     ...(value ?? {}),
@@ -111,10 +111,10 @@ function normalizeSyncConfig(value) {
   };
 }
 
-function getLocalEditorUrl(value) {
+function normalizeEditorUrl(value) {
   const rawEditorUrl = String(value ?? "").trim();
-  if (!rawEditorUrl || rawEditorUrl === LEGACY_HOSTED_EDITOR_URL) {
-    return LOCAL_EDITOR_URL;
+  if (!rawEditorUrl) {
+    return HOSTED_EDITOR_URL;
   }
   return rawEditorUrl;
 }
@@ -897,7 +897,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           ""
       ).trim();
       const source = String(message.payload?.source ?? "local").trim() || "local";
-      const editorUrl = getLocalEditorUrl(store.syncConfig?.editorUrl);
+      const editorUrl = normalizeEditorUrl(store.syncConfig?.editorUrl);
       const normalized = editorUrl.endsWith("/") ? editorUrl.slice(0, -1) : editorUrl;
       const url =
         sessionId
@@ -915,7 +915,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === "CHECK_LOCAL_EDITOR_READY") {
-      const editorUrl = getLocalEditorUrl(store.syncConfig?.editorUrl).replace(/\/$/, "");
+      const editorUrl = LOCAL_EDITOR_URL.replace(/\/$/, "");
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 1500);
       try {

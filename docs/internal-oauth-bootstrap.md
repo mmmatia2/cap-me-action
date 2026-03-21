@@ -4,10 +4,16 @@ Use this as the single first-run operator path for extension identity, OAuth, an
 
 Scope: internal setup baseline only (not full backend troubleshooting).
 
-## 1) Start local app
+## 1) Confirm editor URL baseline (operator default is hosted)
 
-1. Run `pnpm install` (first time only).
-2. Run `pnpm dev:app`.
+Default operator baseline uses hosted editor URL:
+
+- `https://cap-me-action.vercel.app`
+
+Developer/local override is explicit:
+
+- in Inspector `Sync Settings`, set `Editor URL` to `http://localhost:5173`
+- start local app only for that override path (`pnpm install`, then `pnpm dev:app`)
 
 ## 2) Get stable extension ID from repo identity
 
@@ -48,9 +54,10 @@ pnpm extension:set-oauth-client-id -- --client-id "YOUR_CLIENT_ID.apps.googleuse
 Manual in extension inspector:
 
 1. Open Inspector.
-2. In `Sync Settings`, set team endpoint (`.../exec`) and save.
-3. Click `Sign In`.
-4. Confirm a connected account appears.
+2. In `Sync Settings`, keep hosted `Editor URL` for operator path, or set localhost only if you are using local dev override.
+3. Set team endpoint (`.../exec`) and save.
+4. Click `Sign In`.
+5. Confirm a connected account appears.
 
 ## 7) Verify first readiness
 

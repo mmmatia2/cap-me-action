@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { readFileSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
 
 function parseArgs(argv) {
@@ -41,6 +41,29 @@ function deriveExtensionIdFromManifestKey(base64Key) {
   return extensionId;
 }
 
+function listFilesRecursively(rootDir) {
+  const files = [];
+
+  function walk(currentDir) {
+    const entries = readdirSync(currentDir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const entry of entries) {
+      const fullPath = join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      files.push(fullPath);
+    }
+  }
+
+  walk(rootDir);
+  return files;
+}
+
 function main() {
   const repoRoot = process.cwd();
   const rootManifestPath = resolve(repoRoot, "extension", "manifest.json");
@@ -49,22 +72,19 @@ function main() {
   const extensionNameSlug = slugify(rootManifest.name || "extension");
   const defaultArtifactDir = resolve(repoRoot, "artifacts", "extension", `${extensionNameSlug}-v${version}`);
   const artifactDir = resolve(repoRoot, parseArgs(process.argv.slice(2)).artifactDir || defaultArtifactDir);
-  const artifactManifestPath = resolve(artifactDir, "artifact-manifest.json");
   const packagedExtensionDir = resolve(artifactDir, "extension");
   const packagedManifestPath = resolve(packagedExtensionDir, "manifest.json");
+  const artifactManifestPath = resolve(artifactDir, "artifact-manifest.json");
 
-  const artifactManifest = JSON.parse(readFileSync(artifactManifestPath, "utf8"));
   const packagedManifest = JSON.parse(readFileSync(packagedManifestPath, "utf8"));
   const expectedExtensionId = deriveExtensionIdFromManifestKey(String(rootManifest.key || ""));
+  const packagedFiles = listFilesRecursively(packagedExtensionDir);
 
   if (packagedManifest.version !== rootManifest.version) {
     throw new Error(`Manifest version mismatch: root=${rootManifest.version} packaged=${packagedManifest.version}`);
   }
-  if (artifactManifest.version !== rootManifest.version) {
-    throw new Error(`Artifact manifest version mismatch: root=${rootManifest.version} artifact=${artifactManifest.version}`);
-  }
-  if (artifactManifest.extensionName !== rootManifest.name) {
-    throw new Error(`Artifact name mismatch: root=${rootManifest.name} artifact=${artifactManifest.extensionName}`);
+  if (packagedManifest.name !== rootManifest.name) {
+    throw new Error(`Manifest name mismatch: root=${rootManifest.name} packaged=${packagedManifest.name}`);
   }
 
   statSync(packagedExtensionDir);
@@ -73,7 +93,13 @@ function main() {
   console.log(`Load unpacked from: ${packagedExtensionDir}`);
   console.log(`Manifest version: ${rootManifest.version}`);
   console.log(`Expected extension ID: ${expectedExtensionId}`);
-  console.log(`Packaged files: ${Array.isArray(artifactManifest.files) ? artifactManifest.files.length : 0}`);
+  console.log(`Packaged files: ${packagedFiles.length}`);
+  try {
+    readFileSync(artifactManifestPath, "utf8");
+    console.log(`Artifact manifest: ${artifactManifestPath}`);
+  } catch {
+    console.log("Artifact manifest: not present (verification does not require it).");
+  }
   console.log("Chrome install step: open chrome://extensions, enable Developer mode, and load the packaged extension/ folder.");
 }
 

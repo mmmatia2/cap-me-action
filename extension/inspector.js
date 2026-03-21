@@ -1,10 +1,12 @@
 // Purpose: render persisted capture/sync state inside extension inspector UI.
 // Inputs: inspector button events + chrome.storage.local keys. Outputs: capture controls, session exports, and sync actions.
 const APP_SCHEMA_VERSION = "1.1.0";
+const HOSTED_EDITOR_URL = "https://cap-me-action.vercel.app";
 const DEFAULT_SYNC_CONFIG = {
   enabled: false,
   autoUploadOnStop: false,
   endpointUrl: "",
+  editorUrl: HOSTED_EDITOR_URL,
   allowedEmails: [],
   maskInputValues: true
 };
@@ -316,6 +318,7 @@ function normalizeSyncConfig(value) {
     ...DEFAULT_SYNC_CONFIG,
     ...(value ?? {}),
     endpointUrl: String(value?.endpointUrl ?? DEFAULT_SYNC_CONFIG.endpointUrl).trim(),
+    editorUrl: String(value?.editorUrl ?? DEFAULT_SYNC_CONFIG.editorUrl).trim() || DEFAULT_SYNC_CONFIG.editorUrl,
     allowedEmails: allowedRaw.map((x) => String(x).trim().toLowerCase()).filter(Boolean),
     enabled: Boolean(value?.enabled),
     autoUploadOnStop: Boolean(value?.autoUploadOnStop),
@@ -341,6 +344,7 @@ function renderSyncConfigForm(syncConfig) {
   const normalized = normalizeSyncConfig(syncConfig);
   document.getElementById("syncEnabled").checked = Boolean(normalized.enabled);
   document.getElementById("syncEndpointUrl").value = normalized.endpointUrl;
+  document.getElementById("syncEditorUrl").value = normalized.editorUrl;
   document.getElementById("syncAutoUploadOnStop").checked = Boolean(normalized.autoUploadOnStop);
   document.getElementById("syncMaskInputValues").checked = Boolean(normalized.maskInputValues);
   document.getElementById("syncAllowedEmails").value = normalized.allowedEmails.join(", ");
@@ -350,6 +354,7 @@ function readSyncConfigForm() {
   return {
     enabled: Boolean(document.getElementById("syncEnabled").checked),
     endpointUrl: String(document.getElementById("syncEndpointUrl").value || "").trim(),
+    editorUrl: String(document.getElementById("syncEditorUrl").value || "").trim(),
     autoUploadOnStop: Boolean(document.getElementById("syncAutoUploadOnStop").checked),
     maskInputValues: Boolean(document.getElementById("syncMaskInputValues").checked),
     allowedEmails: parseAllowedEmails(document.getElementById("syncAllowedEmails").value)
@@ -374,6 +379,23 @@ function validateSyncConfig(syncConfig) {
 
   if (parsed.protocol !== "https:") {
     return "Sync endpoint URL must use https.";
+  }
+
+  if (syncConfig.editorUrl) {
+    let editorParsed;
+    try {
+      editorParsed = new URL(syncConfig.editorUrl);
+    } catch {
+      return "Editor URL is invalid.";
+    }
+
+    const isHttps = editorParsed.protocol === "https:";
+    const isLocalhost =
+      editorParsed.protocol === "http:" &&
+      (editorParsed.hostname === "localhost" || editorParsed.hostname === "127.0.0.1");
+    if (!isHttps && !isLocalhost) {
+      return "Editor URL must use https, or http://localhost for local development.";
+    }
   }
 
   const invalidEmail = syncConfig.allowedEmails.find((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
@@ -785,7 +807,7 @@ function openSelectedInEditor() {
     return;
   }
   chrome.runtime.sendMessage(
-    { type: "OPEN_EDITOR", payload: { source: "local", sessionId: selectedSessionId } },
+    { type: "OPEN_EDITOR", payload: { source: "capture", sessionId: selectedSessionId } },
     (response) => {
       if (!response?.ok) {
         setStatusText(`Open editor failed: ${response?.error ?? "unknown error"}. Start app with pnpm dev:app.`);
@@ -886,6 +908,7 @@ document.getElementById("syncSignIn").addEventListener("click", signInForSync);
 document.getElementById("syncSignOut").addEventListener("click", signOutForSync);
 document.getElementById("syncEnabled").addEventListener("change", markSyncConfigDirty);
 document.getElementById("syncEndpointUrl").addEventListener("input", markSyncConfigDirty);
+document.getElementById("syncEditorUrl").addEventListener("input", markSyncConfigDirty);
 document.getElementById("syncAutoUploadOnStop").addEventListener("change", markSyncConfigDirty);
 document.getElementById("syncMaskInputValues").addEventListener("change", markSyncConfigDirty);
 document.getElementById("syncAllowedEmails").addEventListener("input", markSyncConfigDirty);

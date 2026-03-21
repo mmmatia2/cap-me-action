@@ -117,7 +117,7 @@ function downloadJson(filename, payload) {
 async function openEditorForSession(sessionId) {
   const response = await sendRuntimeMessage({
     type: "OPEN_EDITOR",
-    payload: { source: "local", sessionId }
+    payload: { source: "capture", sessionId }
   });
   if (!response?.ok) {
     throw new Error(response?.error || "OPEN_EDITOR_FAILED");
@@ -197,7 +197,7 @@ async function handleOpenEditor() {
     return;
   }
   const response = await openEditorForSession(latest.id);
-  captureStatus.textContent = `Opened editor for ${latest.id}. If the page does not load, start the app with pnpm dev:app.`;
+  captureStatus.textContent = `Opened editor for ${latest.id}.`;
   if (typeof response?.url === "string" && response.url.startsWith("http://localhost")) {
     captureStatus.textContent = `Opened local editor for ${latest.id}.`;
   }
@@ -223,7 +223,7 @@ async function handleRecentSessionOpen(sessionId) {
   captureStatus.textContent =
     typeof response?.url === "string" && response.url.startsWith("http://localhost")
       ? `Opened local editor for ${sessionId}.`
-      : `Opened editor for ${sessionId}. If needed, run pnpm dev:app locally.`;
+      : `Opened editor for ${sessionId}.`;
 }
 
 async function handleCheckLocalEditor() {
