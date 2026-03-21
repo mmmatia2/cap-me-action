@@ -9,9 +9,10 @@ It is intentionally lightweight and optimized for fast iteration without drift.
   - `docs/STATE.md`: living product + architecture + contract snapshot.
   - `docs/CONTEXT_MESH_LIGHT.md`: active Architect/Executor operating model and documentation workflow rules.
   - `docs/CHANGELOG.md`: release-level user-visible changes.
+  - `docs/internal-operator-handoff.md`: canonical internal operator handoff for packaged extension + hosted editor baseline.
   - `docs/team-library-protocol.md`: current team-library contract.
   - `docs/export-schema.json`: canonical SOP export JSON schema.
-  - `docs/internal-oauth-bootstrap.md`: canonical first-run internal OAuth/team-sync bootstrap path.
+  - `docs/internal-oauth-bootstrap.md`: supporting first-run OAuth/team-sync bootstrap (used when team sync is required).
   - `docs/adr/`: accepted architecture decisions. `docs/adr/README.md` and `docs/adr/0000-template.md` are helpers, not runtime truth.
 - Supporting runbooks/checklists:
   - `docs/TEAM_SYNC_APPS_SCRIPT.md`
@@ -45,17 +46,15 @@ CI enforces this with `scripts/check-doc-sync.mjs`.
 
 ## Operator Baseline (Hosted Editor)
 
-Default operator path uses the hosted editor URL:
+Canonical operator handoff path:
+
+- `docs/internal-operator-handoff.md`
+
+Hosted editor default:
 
 - `https://cap-me-action.vercel.app`
 
-Expected operator flow:
-
-1. Build and hand off packaged extension artifact (`pnpm extension:package`).
-2. Operator loads packaged `extension/` folder in `chrome://extensions`.
-3. Extension handoff opens hosted editor by default.
-
-This avoids requiring local app startup for standard internal operator usage.
+Use localhost only as an explicit developer override.
 
 ## Local Smoke Start (No Team Auth)
 
@@ -87,13 +86,17 @@ Notes:
 - Localhost remains supported as an explicit developer override by setting Inspector `Sync Settings -> Editor URL` to `http://localhost:5173`.
 - If using localhost override and the editor tab does not load, verify `pnpm dev:app` is still running.
 - Popup and inspector both include `Check Local Editor` to confirm reachability before handoff.
-- For first-run internal team sync bootstrap, use `docs/internal-oauth-bootstrap.md`.
+- For operator handoff, use `docs/internal-operator-handoff.md`.
+- For first-run internal team sync bootstrap (when team sync is needed), use `docs/internal-oauth-bootstrap.md`.
 - Inspector readiness auth now reflects non-interactive token availability at check time (not only stored account email).
 - Inspector `Sign Out` now signs out team-sync access for this extension profile (best-effort token revoke + local auth gate), so readiness reports token unavailable until `Sign In`.
 
 ## Internal Extension Artifact
 
 Use `pnpm extension:package` to build a versioned artifact folder for internal handoff.
+Canonical handoff verification/loading steps live in:
+
+- `docs/internal-operator-handoff.md`
 
 - Output path: `artifacts/extension/<extension-name>-v<manifest.version>/`
 - `extension/` inside that folder is the unpacked extension payload for `chrome://extensions`.

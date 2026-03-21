@@ -3,6 +3,7 @@
 Use this after a clean extension reload and a fresh web app refresh.
 
 First-run prerequisite: complete `docs/internal-oauth-bootstrap.md` once per environment.
+Operator handoff prerequisite: complete `docs/internal-operator-handoff.md` for packaged extension load + hosted editor baseline.
 
 Purpose of this checklist:
 

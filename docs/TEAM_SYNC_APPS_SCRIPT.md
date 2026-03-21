@@ -9,6 +9,7 @@ This runbook is the production path for `CMA-005` and the canonical deployment g
 - Backend code: `backend/google-apps-script/team-library/Code.gs`
 - Backend manifest/scopes: `backend/google-apps-script/team-library/appsscript.json`
 - Backend notes: `backend/google-apps-script/team-library/README.md`
+- Canonical operator handoff runbook: `docs/internal-operator-handoff.md`
 - First-run OAuth/bootstrap runbook: `docs/internal-oauth-bootstrap.md`
 - Protocol contract: `docs/team-library-protocol.md`
 - Fresh setup checklist: `docs/team-library-fresh-setup.md`

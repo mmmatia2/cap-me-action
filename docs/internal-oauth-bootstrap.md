@@ -1,10 +1,11 @@
 # Internal OAuth + Team Sync Bootstrap (First Run)
 
-Use this as the single first-run operator path for extension identity, OAuth, and team-sync readiness.
+Supporting runbook for OAuth/endpoint/sign-in when team sync is required.
+Canonical operator handoff (artifact -> hosted editor capture/open flow) lives in `docs/internal-operator-handoff.md`.
 
 Scope: internal setup baseline only (not full backend troubleshooting).
 
-## 1) Confirm editor URL baseline (operator default is hosted)
+## 1) Confirm editor URL baseline (after operator handoff)
 
 Default operator baseline uses hosted editor URL:
 
