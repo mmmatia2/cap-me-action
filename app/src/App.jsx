@@ -596,22 +596,44 @@ function normalizeTeamAuthErrorCode(value) {
   return text;
 }
 
-function explainTeamAuthError(errorCode) {
-  switch (normalizeTeamAuthErrorCode(errorCode)) {
+function explainTeamFailure(errorCode) {
+  const code = normalizeTeamAuthErrorCode(errorCode);
+  switch (code) {
     case TEAM_SYNC_AUTH_ERROR_CODES.extensionUnavailable:
-      return "Extension auth bridge unavailable. Reload the extension and open the editor from the extension flow.";
+      return {
+        type: "bridge_unavailable",
+        message: "Extension auth bridge unavailable. Reload the extension and open the editor from the extension flow."
+      };
     case TEAM_SYNC_AUTH_ERROR_CODES.authUnavailable:
-      return "Extension auth is unavailable. Confirm the extension is loaded with identity permissions.";
+      return {
+        type: "auth_unavailable",
+        message: "Extension auth is unavailable. Confirm the extension is loaded with identity permissions."
+      };
     case TEAM_SYNC_AUTH_ERROR_CODES.authRequired:
-      return "You are not signed in for team sync. Sign in from the extension inspector, then retry.";
+      return {
+        type: "auth_required",
+        message: "You are not signed in for team sync. Sign in from the extension inspector, then retry."
+      };
     case TEAM_SYNC_AUTH_ERROR_CODES.authDenied:
-      return "Team auth was denied. Re-run Sign In from the extension inspector and approve access.";
+      return {
+        type: "auth_denied",
+        message: "Team auth was denied. Re-run Sign In from the extension inspector and approve access."
+      };
     case TEAM_SYNC_AUTH_ERROR_CODES.tokenExpired:
-      return "Team auth token expired. Sign out and sign in again from the extension inspector.";
+      return {
+        type: "token_expired",
+        message: "Team auth token expired. Sign out and sign in again from the extension inspector."
+      };
     case TEAM_SYNC_AUTH_ERROR_CODES.tokenUnavailable:
-      return "No sync access token is available from the extension background.";
+      return {
+        type: "token_unavailable",
+        message: "No sync access token is available from the extension background."
+      };
     default:
-      return normalizeText(errorCode) || "unknown error";
+      return {
+        type: "backend_library_failure",
+        message: `Team library/backend request failed (${code || "UNKNOWN_ERROR"}). Verify endpoint/deployment and retry.`
+      };
   }
 }
 
@@ -1290,8 +1312,8 @@ export default function App() {
       return { ok: true, items, error: null };
     } catch (err) {
       const code = normalizeTeamAuthErrorCode(err instanceof Error ? err.message : "unknown_error");
-      const message = explainTeamAuthError(code);
-      setTeamStatus(`Team load failed: ${message}`);
+      const failure = explainTeamFailure(code);
+      setTeamStatus(`Team load failed: ${failure.message}`);
       return { ok: false, items: [], error: code };
     }
   }
@@ -1335,7 +1357,8 @@ export default function App() {
       if (code === "SESSION_NOT_FOUND") {
         setTeamStatus(options.notFoundMessage || `Requested team session ${sessionId} was not found.`);
       } else {
-        setTeamStatus(`Team import failed: ${explainTeamAuthError(code)}`);
+        const failure = explainTeamFailure(code);
+        setTeamStatus(`Team import failed: ${failure.message}`);
       }
       return false;
     }

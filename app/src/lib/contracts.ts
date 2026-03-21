@@ -62,7 +62,7 @@ export type StepRecord = {
 };
 
 export type SessionPayload = {
-  schemaVersion?: string;
+  schemaVersion: string;
   exportedAt?: number;
   session: SessionRecord;
   steps: StepRecord[];
