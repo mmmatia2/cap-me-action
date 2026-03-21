@@ -65,7 +65,7 @@ export function migrateSessionPayload(raw: unknown) {
   });
 
   const steps = raw.steps.map((stepRaw, idx) => {
-    const step = isObject(stepRaw) ? stepRaw : {};
+    const step: Record<string, unknown> = isObject(stepRaw) ? stepRaw : {};
     return {
       ...step,
       id: asString(step.id, `step_${idx + 1}`),
@@ -77,7 +77,7 @@ export function migrateSessionPayload(raw: unknown) {
       at: asNumber(step.at, Date.now()),
       annotations: Array.isArray(step.annotations)
         ? step.annotations
-            .map((annotation, annotationIdx) => normalizeAnnotation(annotation, annotationIdx))
+            .map((annotation: unknown, annotationIdx: number) => normalizeAnnotation(annotation, annotationIdx))
             .filter(Boolean)
         : []
     };

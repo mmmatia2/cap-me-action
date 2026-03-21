@@ -130,6 +130,7 @@ Latest recorded runtime validation evidence in `HEAD` conflicts with the repo-ba
 - Repo-backed Apps Script source: `backend/google-apps-script/team-library/`
 - Manifest OAuth helper command: `pnpm extension:set-oauth-client-id -- --client-id "<client-id>.apps.googleusercontent.com"`
 - Stable extension ID helper command: `pnpm extension:print-id`
+- Contract-boundary typecheck command: `pnpm typecheck:contracts` (scoped to `app/src/lib/contracts.ts` and `app/src/lib/migrations.ts`).
 
 ## Historical Planning References
 
