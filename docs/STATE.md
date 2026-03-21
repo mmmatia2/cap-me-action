@@ -60,6 +60,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - Local editor readiness now distinguishes healthy `200`, reachable-but-unhealthy non-`200`, unreachable, and timeout states in operator messaging.
   - Extension manifest includes localhost host permission for local readiness fetches, and repo now includes a narrow extension JS syntax guard (`pnpm extension:check-syntax`) to catch popup/script parse failures early.
   - Extension identity is now repo-pinned via `manifest.key`, and OAuth helper tooling can derive/print the stable extension ID used for internal Chrome OAuth client setup.
+  - Repo now includes `pnpm extension:package` for producing a versioned unpacked-extension artifact at `artifacts/extension/` for internal handoff.
   - Editor team-library status text now explicitly distinguishes extension bridge unavailability, auth-required/token-unavailable states, and backend/library request failures.
   - Content script injects a floating recorder dock from `ui-floating-control/index.html` while capture is active, with live timer/step count and pause/finish controls.
   - Action popup uses local MV3-safe CSS/HTML (no remote Tailwind runtime), aligned to the intended visual direction while preserving existing capture/session wiring.

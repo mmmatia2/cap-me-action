@@ -9,6 +9,7 @@
     "docs:bundle": "node scripts/build-context-bundle.mjs",
     "typecheck:contracts": "tsc -p app/tsconfig.contracts.json --noEmit",
     "extension:check-syntax": "node scripts/check-extension-syntax.mjs",
+    "extension:package": "node scripts/package-extension.mjs",
     "extension:print-id": "node scripts/set-extension-oauth-client-id.mjs --print-extension-id",
     "test:contracts": "pnpm test:contracts:run",
     "test:contracts:run": "pnpm dlx tsx tests/export-contract.test.ts",

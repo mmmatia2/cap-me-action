@@ -27,3 +27,6 @@ Thumbs.db
 
 # Generated docs bundle
 docs/context-bundle.md
+
+# Generated internal artifacts
+artifacts/

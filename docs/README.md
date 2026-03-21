@@ -40,6 +40,7 @@ CI enforces this with `scripts/check-doc-sync.mjs`.
 
 - `pnpm docs:check`: verify code changes are paired with documentation updates.
 - `pnpm docs:bundle`: generate a shareable active-context bundle at `docs/context-bundle.md`.
+- `pnpm extension:package`: create a versioned unpacked-extension artifact at `artifacts/extension/<extension-name>-v<manifest.version>/extension`.
 
 ## Local Smoke Start (No Team Auth)
 
@@ -73,3 +74,15 @@ Notes:
 - For first-run internal team sync bootstrap, use `docs/internal-oauth-bootstrap.md`.
 - Inspector readiness auth now reflects non-interactive token availability at check time (not only stored account email).
 - Inspector `Sign Out` now signs out team-sync access for this extension profile (best-effort token revoke + local auth gate), so readiness reports token unavailable until `Sign In`.
+
+## Internal Extension Artifact
+
+Use `pnpm extension:package` to build a versioned artifact folder for internal handoff.
+
+- Output path: `artifacts/extension/<extension-name>-v<manifest.version>/`
+- `extension/` inside that folder is the unpacked extension payload for `chrome://extensions`.
+- `artifact-manifest.json` records included files and SHA-256 hashes.
+
+This does not package or host the editor app. Operators still need either:
+- local app runtime (`pnpm dev:app`), or
+- a configured hosted editor URL in extension sync settings.
