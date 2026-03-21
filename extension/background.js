@@ -290,6 +290,17 @@ function sessionById(sessions, sessionId) {
   return sessions.find((x) => x.id === sessionId) ?? null;
 }
 
+function buildSyncSnapshot(store, sessionId) {
+  const session = sessionById(store.sessions, sessionId);
+  const queueItem = store.syncQueue.find((x) => x.sessionId === sessionId) ?? null;
+  return {
+    sessionId,
+    sync: session?.sync ?? null,
+    queueItem,
+    syncState: store.syncState
+  };
+}
+
 function buildSyncPayload(session, steps, capturedBy, syncRevision, maskInputValues) {
   const maskedSteps = steps.map((step) => {
     if (!maskInputValues) {
@@ -943,8 +954,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const queued = ensureSessionQueued(store, targetSessionId, "manual-last");
       await saveStore(store);
       await scheduleSyncAlarm(store.syncQueue);
-      await processSyncQueue("manual-last");
-      sendResponse({ ok: queued.ok, sessionId: targetSessionId, error: queued.errorCode ?? null });
+      if (queued.ok) {
+        await processSyncQueue("manual-last");
+      }
+      const latestStore = await loadStore();
+      sendResponse({
+        ok: queued.ok,
+        error: queued.errorCode ?? null,
+        protocolVersion: TEAM_SYNC_PROTOCOL_VERSION,
+        ...buildSyncSnapshot(latestStore, targetSessionId)
+      });
       return;
     }
 
@@ -957,8 +976,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const queued = ensureSessionQueued(store, targetSessionId, "manual-id");
       await saveStore(store);
       await scheduleSyncAlarm(store.syncQueue);
-      await processSyncQueue("manual-id");
-      sendResponse({ ok: queued.ok, sessionId: targetSessionId, error: queued.errorCode ?? null });
+      if (queued.ok) {
+        await processSyncQueue("manual-id");
+      }
+      const latestStore = await loadStore();
+      sendResponse({
+        ok: queued.ok,
+        error: queued.errorCode ?? null,
+        protocolVersion: TEAM_SYNC_PROTOCOL_VERSION,
+        ...buildSyncSnapshot(latestStore, targetSessionId)
+      });
       return;
     }
 

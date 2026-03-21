@@ -55,8 +55,10 @@ Manual in extension inspector:
 ## 7) Verify first readiness
 
 1. In popup or inspector, click `Check Local Editor` and confirm healthy.
-2. In app, switch source to `Team Library` and click `Load Library`.
-3. Confirm no immediate auth error (`AUTH_REQUIRED`, `TOKEN_UNAVAILABLE`, `EXTENSION_UNAVAILABLE`).
+2. Capture a short local session, open Inspector, select that session, and click `Sync Selected Session`.
+3. Confirm inspector reports `Session sync succeeded.` (or an actionable failure code/next step).
+4. In app, switch source to `Team Library` and click `Load Library`.
+5. Confirm the library list loads, import one team session, and confirm no immediate auth error (`AUTH_REQUIRED`, `TOKEN_UNAVAILABLE`, `EXTENSION_UNAVAILABLE`).
 
 ## Supporting docs
 

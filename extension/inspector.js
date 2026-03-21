@@ -171,6 +171,53 @@ function getReadinessSyncText(syncConfig, selectedSession, syncState) {
   return "Sync: local/not uploaded yet.";
 }
 
+function explainSyncErrorCode(errorCode) {
+  switch (String(errorCode ?? "").trim()) {
+    case "SYNC_DISABLED":
+      return "enable team sync in Sync Settings";
+    case "SYNC_ENDPOINT_MISSING":
+      return "set endpoint URL in Sync Settings";
+    case "AUTH_REQUIRED":
+      return "sign in from inspector";
+    case "AUTH_DENIED":
+      return "confirm allowed account/email and sign in again";
+    case "TOKEN_EXPIRED":
+      return "sign out and sign in again";
+    case "NETWORK_ERROR":
+      return "verify endpoint URL and network reachability";
+    case "QUOTA_EXCEEDED":
+      return "check Apps Script/Drive quota and retry later";
+    default:
+      return "check endpoint/auth settings and retry";
+  }
+}
+
+function getManualSyncStatusText(response) {
+  const sync = response?.sync ?? null;
+  const queueItem = response?.queueItem ?? null;
+  const syncStateError = response?.syncState?.lastErrorCode ?? null;
+  const errorCode = sync?.errorCode ?? queueItem?.lastErrorCode ?? syncStateError ?? response?.error ?? null;
+  const status = sync?.status ?? null;
+
+  if (status === "synced") {
+    return "Session sync succeeded.";
+  }
+  if (status === "pending") {
+    if (errorCode) {
+      return `Session sync pending retry (${errorCode}): ${explainSyncErrorCode(errorCode)}.`;
+    }
+    return "Session sync queued and pending upload.";
+  }
+  if (status === "failed" || status === "blocked") {
+    const code = errorCode || "UNKNOWN_ERROR";
+    return `Session sync ${status}: ${code}. Next step: ${explainSyncErrorCode(code)}.`;
+  }
+  if (errorCode) {
+    return `Session sync did not complete: ${errorCode}. Next step: ${explainSyncErrorCode(errorCode)}.`;
+  }
+  return "Session sync request sent; refresh to confirm status.";
+}
+
 function renderReadinessSummary() {
   const syncConfig = normalizeSyncConfig(readinessContext.syncConfig);
   setReadinessText("readinessLocalEditor", getReadinessLocalEditorText());
@@ -665,10 +712,11 @@ function syncSelectedSession() {
     { type: "SYNC_SESSION_BY_ID", payload: { sessionId: selectedSessionId } },
     (response) => {
       if (!response?.ok) {
-        setStatusText(`Sync enqueue failed: ${response?.error ?? "unknown error"}`);
+        const code = response?.error ?? "unknown error";
+        setStatusText(`Sync enqueue failed: ${code}. Next step: ${explainSyncErrorCode(code)}.`);
         return;
       }
-      setStatusText("Session queued for sync.");
+      setStatusText(getManualSyncStatusText(response));
       refreshCaptureState();
     }
   );
