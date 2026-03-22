@@ -82,16 +82,26 @@ if (minimizeBtn) {
 if (dragHandle) {
   dragHandle.addEventListener("pointerdown", (event) => {
     isDragging = true;
-    lastPointer = { x: event.clientX, y: event.clientY };
+    lastPointer = { x: event.screenX, y: event.screenY };
     dragHandle.setPointerCapture(event.pointerId);
   });
   dragHandle.addEventListener("pointermove", (event) => {
     if (!isDragging || !lastPointer) {
       return;
     }
-    const dx = event.clientX - lastPointer.x;
-    const dy = event.clientY - lastPointer.y;
-    lastPointer = { x: event.clientX, y: event.clientY };
+    if (event.buttons === 0) {
+      isDragging = false;
+      lastPointer = null;
+      return;
+    }
+    const fallbackDx = event.screenX - lastPointer.x;
+    const fallbackDy = event.screenY - lastPointer.y;
+    const dx = Number.isFinite(event.movementX) ? event.movementX : fallbackDx;
+    const dy = Number.isFinite(event.movementY) ? event.movementY : fallbackDy;
+    lastPointer = { x: event.screenX, y: event.screenY };
+    if (dx === 0 && dy === 0) {
+      return;
+    }
     send("MOVE_DOCK", { dx, dy });
   });
   const stopDragging = (event) => {

@@ -418,8 +418,10 @@ let floatingDockFrame = null;
 let dockUi = { left: null, bottom: 18, minimized: false };
 let dockUiLoaded = false;
 
-const DOCK_EXPANDED = { width: 400, height: 72 };
-const DOCK_MINIMIZED = { width: 220, height: 64 };
+const DOCK_EXPANDED = { width: 324, height: 54 };
+const DOCK_MINIMIZED = { width: 124, height: 48 };
+let dockHiddenForScreenshot = false;
+let dockRestoreSafetyTimer = null;
 
 function sendRuntimeMessage(message) {
   return new Promise((resolve) => {
@@ -470,10 +472,35 @@ function applyDockFrameStyle() {
   floatingDockFrame.style.width = `${size.width}px`;
   floatingDockFrame.style.height = `${size.height}px`;
   floatingDockFrame.style.border = "0";
-  floatingDockFrame.style.borderRadius = dockUi.minimized ? "18px" : "30px";
+  floatingDockFrame.style.borderRadius = dockUi.minimized ? "14px" : "24px";
   floatingDockFrame.style.zIndex = "2147483647";
   floatingDockFrame.style.background = "transparent";
   floatingDockFrame.style.boxShadow = "0 12px 35px rgba(0,0,0,0.35)";
+}
+
+function setDockScreenshotVisibility(hidden) {
+  if (!floatingDockFrame) {
+    return false;
+  }
+  if (dockRestoreSafetyTimer) {
+    clearTimeout(dockRestoreSafetyTimer);
+    dockRestoreSafetyTimer = null;
+  }
+  if (hidden) {
+    dockHiddenForScreenshot = true;
+    floatingDockFrame.style.opacity = "0";
+    floatingDockFrame.style.visibility = "hidden";
+    floatingDockFrame.style.pointerEvents = "none";
+    dockRestoreSafetyTimer = setTimeout(() => {
+      setDockScreenshotVisibility(false);
+    }, 1600);
+    return true;
+  }
+  dockHiddenForScreenshot = false;
+  floatingDockFrame.style.opacity = "";
+  floatingDockFrame.style.visibility = "";
+  floatingDockFrame.style.pointerEvents = "";
+  return true;
 }
 
 function toggleDockMinimize() {
@@ -550,8 +577,13 @@ function removeFloatingDock() {
   if (!floatingDockFrame) {
     return;
   }
+  if (dockRestoreSafetyTimer) {
+    clearTimeout(dockRestoreSafetyTimer);
+    dockRestoreSafetyTimer = null;
+  }
   floatingDockFrame.remove();
   floatingDockFrame = null;
+  dockHiddenForScreenshot = false;
 }
 
 function postDockState() {
@@ -744,6 +776,22 @@ if (chrome?.storage?.onChanged?.addListener) {
     }
     if (changes.captureState || changes.steps) {
       refreshDockState();
+    }
+  });
+}
+
+if (chrome?.runtime?.onMessage?.addListener) {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (!message?.type) {
+      return;
+    }
+    if (message.type === "HIDE_DOCK_FOR_SCREENSHOT") {
+      sendResponse({ ok: setDockScreenshotVisibility(true), hidden: dockHiddenForScreenshot });
+      return;
+    }
+    if (message.type === "RESTORE_DOCK_AFTER_SCREENSHOT") {
+      sendResponse({ ok: setDockScreenshotVisibility(false), hidden: dockHiddenForScreenshot });
+      return;
     }
   });
 }

@@ -65,6 +65,9 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - Editor team-library status text now explicitly distinguishes extension bridge unavailability, auth-required/token-unavailable states, and backend/library request failures.
   - Popup, inspector, and the editor header/import plus working surface now share a repo-backed operational styling baseline: neutral light palette, tighter panel/card treatment, disciplined status colors, and consistent control hierarchy for internal backoffice use.
   - Content script injects a floating recorder dock from `ui-floating-control/index.html` while capture is active, with live timer/step count and pause/finish controls.
+  - Thumbnail capture now uses a best-effort dock exclusion handshake with deterministic restore safeguards: hide dock iframe before `captureVisibleTab`, restore immediately after, fall back to capture without exclusion if handshake is unavailable, and auto-restore hidden dock state on content-script timeout.
+  - Thumbnail policy captures `click`, `input`, `select`, `toggle`, `navigate`, `scroll`, plus meaningful keyboard transitions (`Enter`/`Tab`/`Escape` and `Ctrl/Cmd` shortcuts), with adaptive per-tab throttle (tighter for repeated same-page actions; looser for meaningful state transitions) and shorter retry backoff after capture failure.
+  - Step persistence is now guarded from thumbnail-side faults/timeouts: if thumbnail capture fails or exceeds a short timeout, the step still records with `thumbnailDataUrl: null`.
   - Action popup uses local MV3-safe CSS/HTML (no remote Tailwind runtime), aligned to the intended visual direction while preserving existing capture/session wiring.
   - Floating dock has local CSS compact styling, per-tab step count via `GET_DOCK_STATE`, and working `Discard Last Step` action with in-dock feedback.
   - Floating dock supports drag-to-reposition with persisted placement (`dockUi`) and minimize/restore behavior.

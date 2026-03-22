@@ -3,28 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Scribe Clone Dock</title>
+    <title>Cap Me Action Dock</title>
     <style>
       :root {
-        color-scheme: light dark;
+        color-scheme: light;
         --bg-color: #ffffff;
-        --border-color: #e2e8f0;
-        --text-main: #0f172a;
-        --text-muted: #64748b;
-        --accent: #4f46e5;
-        --accent-hover: #4338ca;
-        --danger: #ef4444;
-      }
-      
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg-color: #1e293b;
-          --border-color: #334155;
-          --text-main: #f8fafc;
-          --text-muted: #94a3b8;
-          --accent: #6366f1;
-          --accent-hover: #4f46e5;
-        }
+        --surface-2: #f5f8fb;
+        --border-color: #ccd6e2;
+        --text-main: #16202b;
+        --text-muted: #627487;
+        --accent: #24599b;
+        --accent-hover: #18477d;
+        --danger: #b42318;
       }
 
       * { box-sizing: border-box; }
@@ -41,10 +31,10 @@
         background: var(--bg-color);
         border: 1px solid var(--border-color);
         border-radius: 999px;
-        padding: 8px 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        gap: 12px;
-        height: 52px;
+        padding: 5px 8px;
+        box-shadow: 0 8px 20px rgba(23, 37, 52, 0.18);
+        gap: 8px;
+        height: 42px;
         transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         width: 100%;
       }
@@ -54,13 +44,14 @@
         color: var(--text-muted);
         display: flex;
         align-items: center;
-        padding: 4px;
-        margin-left: -4px;
-        border-radius: 4px;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
       }
 
       .drag-handle:hover {
-        background: rgba(100, 116, 139, 0.1);
+        background: var(--surface-2);
         color: var(--text-main);
       }
 
@@ -69,9 +60,9 @@
       }
 
       .recording-indicator {
-        width: 10px;
-        height: 10px;
-        border-radius: 5px;
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
         background: var(--danger);
         animation: pulse 2s infinite;
       }
@@ -85,17 +76,17 @@
       .stats {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 8px;
         color: var(--text-main);
         font-variant-numeric: tabular-nums;
-        font-weight: 500;
-        font-size: 14px;
+        font-weight: 600;
+        font-size: 12px;
       }
 
       .stat-item {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 5px;
       }
 
       .stat-icon {
@@ -104,24 +95,24 @@
 
       .divider {
         width: 1px;
-        height: 24px;
+        height: 18px;
         background: var(--border-color);
       }
 
       .actions {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 3px;
         margin-left: auto;
       }
 
       .btn {
         background: transparent;
-        border: none;
+        border: 1px solid transparent;
         color: var(--text-main);
-        width: 32px;
-        height: 32px;
-        border-radius: 16px;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -131,11 +122,13 @@
       }
 
       .btn:hover {
-        background: rgba(100, 116, 139, 0.1);
+        border-color: var(--border-color);
+        background: var(--surface-2);
       }
 
       .btn.primary {
         background: var(--accent);
+        border-color: var(--accent);
         color: white;
       }
 
@@ -150,9 +143,9 @@
         transform: translateX(-50%) translateY(10px);
         background: var(--text-main);
         color: var(--bg-color);
-        padding: 6px 12px;
+        padding: 4px 8px;
         border-radius: 6px;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 500;
         pointer-events: none;
         opacity: 0;
@@ -170,6 +163,10 @@
       .dock-root.minimized .divider,
       .dock-root.minimized .btn:not(.minimize-btn) {
         display: none;
+      }
+
+      .dock-root.minimized {
+        justify-content: center;
       }
     </style>
   </head>

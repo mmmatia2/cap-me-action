@@ -193,8 +193,33 @@ function createSession(sessionId, tabId, payload) {
   });
 }
 
-function shouldCaptureThumbnail(type) {
-  return ["click", "input", "select", "toggle", "navigate"].includes(type);
+function shouldCaptureThumbnail(step) {
+  const type = step?.type ?? "";
+  if (["click", "input", "select", "toggle", "navigate", "scroll"].includes(type)) {
+    return true;
+  }
+  if (type !== "key") {
+    return false;
+  }
+  const key = String(step?.key || "");
+  if (["Enter", "Tab", "Escape"].includes(key)) {
+    return true;
+  }
+  const modifiers = step?.modifiers ?? {};
+  return Boolean(modifiers.ctrl || modifiers.meta);
+}
+
+function thumbnailThrottleMs(currentType, previousType, sameUrl) {
+  if (currentType === "scroll") {
+    return 2200;
+  }
+  if (currentType === "navigate") {
+    return 550;
+  }
+  if (currentType === previousType && sameUrl) {
+    return 1200;
+  }
+  return 500;
 }
 
 function getStorage(keys) {
@@ -672,6 +697,38 @@ function captureVisibleTab(windowId) {
   });
 }
 
+function sendTabMessage(tabId, message, options = {}) {
+  return new Promise((resolve) => {
+    if (!Number.isFinite(tabId)) {
+      resolve({ ok: false, error: "INVALID_TAB_ID" });
+      return;
+    }
+    const timeoutMs = Number.isFinite(options.timeoutMs) ? Math.max(0, options.timeoutMs) : 250;
+    let timer = null;
+    let settled = false;
+    const finish = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+      resolve(value);
+    };
+    timer = setTimeout(() => {
+      finish({ ok: false, error: "TAB_MESSAGE_TIMEOUT" });
+    }, timeoutMs);
+    chrome.tabs.sendMessage(tabId, message, (response) => {
+      if (chrome.runtime.lastError) {
+        finish({ ok: false, error: chrome.runtime.lastError.message || "TAB_MESSAGE_FAILED" });
+        return;
+      }
+      finish(response ?? { ok: true });
+    });
+  });
+}
+
 async function blobToBase64(blob) {
   const buffer = await blob.arrayBuffer();
   const bytes = new Uint8Array(buffer);
@@ -741,8 +798,9 @@ async function compressThumbnail(dataUrl, options = THUMBNAIL_CAPTURE_CONFIG) {
   }
 }
 
-async function maybeCaptureThumbnail(sender, stepType) {
-  if (!shouldCaptureThumbnail(stepType)) {
+async function maybeCaptureThumbnail(sender, step) {
+  const stepType = step?.type ?? "";
+  if (!shouldCaptureThumbnail(step)) {
     return null;
   }
 
@@ -753,17 +811,61 @@ async function maybeCaptureThumbnail(sender, stepType) {
 
   const tabKey = String(tab.id);
   const now = nowTs();
-  if (now - (lastThumbnailCaptureByTab[tabKey] ?? 0) < 1400) {
+  const previous = lastThumbnailCaptureByTab[tabKey] ?? null;
+  const previousAt = Number(previous?.at) || 0;
+  const previousType = typeof previous?.type === "string" ? previous.type : null;
+  const sameUrl = Boolean(step?.url) && step.url === previous?.url;
+  const baseIntervalMs = thumbnailThrottleMs(stepType, previousType, sameUrl);
+  const minIntervalMs = previous?.succeeded === false ? Math.min(baseIntervalMs, 320) : baseIntervalMs;
+  if (now - previousAt < minIntervalMs) {
     return null;
   }
-  lastThumbnailCaptureByTab[tabKey] = now;
-
-  const raw = await captureVisibleTab(tab.windowId);
-  if (!raw) {
-    return null;
+  let dockHidden = false;
+  let raw = null;
+  const markCaptureAttempt = (succeeded) => {
+    lastThumbnailCaptureByTab[tabKey] = {
+      at: nowTs(),
+      type: stepType,
+      url: step?.url || tab.url || "",
+      succeeded: Boolean(succeeded)
+    };
+  };
+  try {
+    const hideResult = await sendTabMessage(
+      tab.id,
+      { type: "HIDE_DOCK_FOR_SCREENSHOT" },
+      { timeoutMs: 120 }
+    );
+    dockHidden = Boolean(hideResult?.ok);
+    if (dockHidden) {
+      await new Promise((resolve) => setTimeout(resolve, 28));
+    }
+    raw = await captureVisibleTab(tab.windowId);
+    if (!raw && dockHidden) {
+      await sendTabMessage(
+        tab.id,
+        { type: "RESTORE_DOCK_AFTER_SCREENSHOT" },
+        { timeoutMs: 120 }
+      );
+      dockHidden = false;
+      raw = await captureVisibleTab(tab.windowId);
+    }
+    if (!raw) {
+      markCaptureAttempt(false);
+      return null;
+    }
+    const compressed = await compressThumbnail(raw, THUMBNAIL_CAPTURE_CONFIG);
+    markCaptureAttempt(Boolean(compressed));
+    return compressed;
+  } finally {
+    if (dockHidden) {
+      await sendTabMessage(
+        tab.id,
+        { type: "RESTORE_DOCK_AFTER_SCREENSHOT" },
+        { timeoutMs: 120 }
+      );
+    }
   }
-
-  return compressThumbnail(raw, THUMBNAIL_CAPTURE_CONFIG);
 }
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -1169,7 +1271,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         step.at - (latestSessionStep.at ?? 0) <= 800;
 
       if (!isDuplicate) {
-        step.thumbnailDataUrl = await maybeCaptureThumbnail(sender, step.type);
+        try {
+          const thumbnail = await Promise.race([
+            maybeCaptureThumbnail(sender, step),
+            new Promise((resolve) => setTimeout(() => resolve(null), 900))
+          ]);
+          step.thumbnailDataUrl = typeof thumbnail === "string" ? thumbnail : null;
+        } catch {
+          step.thumbnailDataUrl = null;
+        }
         store.steps.push(step);
       }
 
