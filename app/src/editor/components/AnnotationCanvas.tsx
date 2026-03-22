@@ -29,12 +29,15 @@ export function AnnotationCanvas({
     <div
       ref={screenshotRef}
       onMouseDown={onMouseDown}
-      className={`
-        relative border border-border rounded-xl overflow-hidden mb-3 select-none
-        ${annotationMode ? "cursor-crosshair" : "cursor-default"}
-      `}
+      onDragStart={(e) => e.preventDefault()}
+      className={`editor-annotation__canvas relative select-none ${annotationMode ? "cursor-crosshair" : "cursor-default"}`}
     >
-      <img src={imageUrl} alt="Step screenshot" className="w-full block" />
+      <img
+        src={imageUrl}
+        alt="Step screenshot"
+        className="w-full block pointer-events-none"
+        draggable={false}
+      />
       
       {annotations.map((annotation) => {
         const isRedact = annotation.type === "redact";
@@ -56,6 +59,7 @@ export function AnnotationCanvas({
                 : isRedact ? "none" : "2px solid var(--accent)",
               backgroundColor: isRedact ? "rgba(0, 0, 0, 0.8)" : "rgba(59, 130, 246, 0.15)",
               backdropFilter: isRedact ? "blur(8px)" : "none",
+              pointerEvents: annotationMode ? "none" : "auto",
             }}
             title={annotation.label || (isRedact ? "Redaction" : "Highlight")}
           >

@@ -653,7 +653,7 @@ export default function App() {
   const [payload, setPayload] = useState(null);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState(null);
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState(() => window.localStorage.getItem("cap_me_theme") || "light");
   const [extensionSessions, setExtensionSessions] = useState([]);
   const [extensionSteps, setExtensionSteps] = useState([]);
   const [selectedExtensionSessionId, setSelectedExtensionSessionId] = useState("");
@@ -677,11 +677,13 @@ export default function App() {
   useEffect(() => {
     // Purpose: keep page chrome visually consistent with the selected editor theme.
     // Inputs: current theme palette. Outputs: document-level background/margin styles.
+    document.documentElement.dataset.theme = theme;
     document.body.style.margin = "0";
     document.body.style.background = palette.bg;
     document.body.style.color = palette.text;
     document.documentElement.style.background = palette.bg;
-  }, [palette.bg, palette.text]);
+    window.localStorage.setItem("cap_me_theme", theme);
+  }, [palette.bg, palette.text, theme]);
 
   const selectedStep = useMemo(
     () => payload?.steps?.find((step) => step.id === selectedId) || payload?.steps?.[0] || null,
@@ -986,6 +988,15 @@ export default function App() {
     const width = Math.abs(start.x - end.x);
     const height = Math.abs(start.y - end.y);
     return { x, y, width, height };
+  }
+
+  function toRelativePoint(event, rect) {
+    const rawX = (event.clientX - rect.left) / rect.width;
+    const rawY = (event.clientY - rect.top) / rect.height;
+    return {
+      x: clampUnit(rawX),
+      y: clampUnit(rawY)
+    };
   }
 
   function onScreenshotMouseDown(event) {
@@ -1372,7 +1383,7 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell flex flex-col">
+    <main className="app-shell flex flex-col" data-theme={theme}>
       <header className="app-topbar">
         <div className="app-topbar__brand">
           <div className="app-topbar__mark">
@@ -1567,18 +1578,17 @@ export default function App() {
         )}
 
         {payload && (
-          <div className="flex-1 flex gap-6 min-h-0">
-            {/* Sidebar List */}
-            <aside className="w-[380px] flex-shrink-0 flex flex-col bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-border bg-surface flex justify-between items-center">
-                <h2 className="text-base font-bold m-0 text-text truncate pr-4">
+          <div className="editor-workspace">
+            <aside className="editor-sidebar">
+              <div className="editor-sidebar__header">
+                <h2 className="editor-sidebar__title truncate pr-4">
                   {payload.session.lastTitle || payload.session.startTitle || payload.session.id}
                 </h2>
-                <span className="text-xs font-semibold bg-surface-2 text-muted px-2 py-1 rounded-md whitespace-nowrap">
+                <span className="editor-sidebar__count">
                   {payload.steps.length} steps
                 </span>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+              <div className="editor-sidebar__list custom-scrollbar">
                 <StepList 
                   steps={payload.steps}
                   selectedId={selectedId}
@@ -1595,23 +1605,23 @@ export default function App() {
               </div>
             </aside>
 
-            {/* Main Content Area */}
-            <article className="flex-1 flex flex-col bg-surface border border-border rounded-xl shadow-sm overflow-y-auto custom-scrollbar relative">
+            <article className="editor-main custom-scrollbar">
               {!selectedStep ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-muted p-12 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-surface-2 flex items-center justify-center mb-4 border border-border">
+                <div className="editor-main__empty">
+                  <div className="editor-main__empty-icon">
                     <MonitorSmartphone size={32} className="opacity-50" />
                   </div>
                   <h3 className="text-lg font-semibold text-text mb-2">No Step Selected</h3>
                   <p className="max-w-md">Select a step from the sidebar to edit its title, instructions, and annotate its screenshot.</p>
                 </div>
               ) : (
-                <div className="p-8 max-w-3xl mx-auto w-full flex flex-col gap-8">
-                  <div className="flex items-center gap-3 border-b border-border pb-4">
-                    <span className="w-8 h-8 rounded-full bg-accent/10 text-accent flex items-center justify-center font-bold text-sm">
+                <div className="editor-main__content">
+                  <section className="editor-section">
+                  <div className="editor-section__header">
+                    <span className="editor-section__index">
                       {selectedStep.stepIndex}
                     </span>
-                    <h2 className="text-xl font-bold m-0 text-text">Edit Step</h2>
+                    <h2 className="editor-section__title">Edit Step</h2>
                   </div>
 
                   <StepDetails 
@@ -1620,33 +1630,34 @@ export default function App() {
                     note={selectedStep.note}
                     onChange={(patch) => updateStep(selectedStep.id, patch)}
                   />
+                  </section>
 
-                  <div className="pt-6 border-t border-border">
-                    <div className="flex justify-between items-end mb-4">
+                  <section className="editor-annotation">
+                    <div className="editor-annotation__header">
                       <div>
-                        <h3 className="text-base font-semibold m-0 text-text">Screenshot</h3>
-                        <p className="text-sm text-muted m-0 mt-1">Annotate important areas visually</p>
+                        <h3 className="editor-annotation__title">Screenshot Workspace</h3>
+                        <p className="editor-annotation__subtitle">Annotate important areas visually</p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="editor-annotation__actions">
                         {selectedStep.thumbnailDataUrl && (
                           <>
                             <button
                               type="button"
                               onClick={() => setAnnotationMode((prev) => prev === "highlight" ? null : "highlight")}
-                              className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-colors border shadow-sm
+                              className={`app-button editor-annotation__mode
                                 ${annotationMode === "highlight"
-                                  ? "bg-accent text-white border-accent" 
-                                  : "bg-surface-2 text-text border-border hover:border-muted"}`}
+                                  ? "editor-annotation__mode--active" 
+                                  : ""}`}
                             >
                               Highlight
                             </button>
                             <button
                               type="button"
                               onClick={() => setAnnotationMode((prev) => prev === "redact" ? null : "redact")}
-                              className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-colors border shadow-sm
+                              className={`app-button editor-annotation__mode
                                 ${annotationMode === "redact"
-                                  ? "bg-accent text-white border-accent" 
-                                  : "bg-surface-2 text-text border-border hover:border-muted"}`}
+                                  ? "editor-annotation__mode--active" 
+                                  : ""}`}
                             >
                               Redact
                             </button>
@@ -1656,7 +1667,8 @@ export default function App() {
                           <button 
                             type="button" 
                             onClick={() => deleteAnnotation(selectedStep.id, activeAnnotationId)}
-                            className="px-3 py-1.5 rounded-lg font-medium text-sm bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20 transition-colors shadow-sm flex items-center gap-1.5"
+                            className="app-button editor-annotation__mode"
+                            style={{ color: "var(--danger)", borderColor: "#e3c2bf", background: "#fbf1f0" }}
                           >
                             <Trash2 size={14} />
                             Remove
@@ -1682,8 +1694,8 @@ export default function App() {
                         />
 
                         {activeAnnotation && activeAnnotation.type !== "redact" ? (
-                          <div className="mt-4 bg-surface-2 p-4 rounded-xl border border-border">
-                            <label htmlFor="highlight-label" className="text-sm font-semibold text-text block mb-1.5">
+                          <div className="editor-annotation__callout">
+                            <label htmlFor="highlight-label" className="editor-field__label" style={{ marginBottom: "6px", display: "block" }}>
                               Highlight Label
                             </label>
                             <input
@@ -1691,22 +1703,22 @@ export default function App() {
                               value={activeAnnotation.label || ""}
                               onChange={(event) => upsertAnnotation(selectedStep.id, activeAnnotation.id, { label: event.target.value })}
                               placeholder="e.g. Click the 'Save' button"
-                              className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                              className="editor-field__input"
                             />
                           </div>
                         ) : (
-                          <p className="text-sm text-muted bg-surface-2 p-3 rounded-lg border border-border text-center">
+                          <p className="editor-annotation__callout text-sm text-center">
                             {annotationMode ? "Drag a rectangle on the image to draw." : "Click a tool above to add boxes, or select an existing one to edit."}
                           </p>
                         )}
                       </div>
                     ) : (
-                      <div className="bg-surface-2 p-8 rounded-xl border border-border text-center flex flex-col items-center justify-center text-muted gap-3">
+                      <div className="editor-annotation__empty">
                         <MonitorSmartphone size={32} className="opacity-40" />
                         <p className="m-0 text-sm">No screenshot available for this step.</p>
                       </div>
                     )}
-                  </div>
+                  </section>
                 </div>
               )}
             </article>

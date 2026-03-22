@@ -33,7 +33,7 @@ export function StepList({
   dragState,
 }: StepListProps) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="step-list">
       {steps.map((step, idx) => {
         const isSelected = step.id === selectedId;
         const isOver = dragState.overId === step.id;
@@ -51,15 +51,11 @@ export function StepList({
             onDragOver={(e) => onDragOver(step.id, e)}
             onDrop={(e) => onDrop(step.id, e)}
             onDragEnd={onDragEnd}
-            className={`
-              group flex flex-col gap-2 p-3 rounded-xl border transition-all duration-200
-              ${isSelected ? "bg-surface-2 border-accent shadow-sm" : "bg-surface border-border hover:border-muted"}
-              ${dragStyles}
-            `}
+            className={`step-item ${isSelected ? "step-item--active" : ""} ${dragStyles}`}
           >
-            <div className="flex items-start gap-2">
+            <div className="step-item__top">
               <div 
-                className="mt-1 cursor-grab text-muted hover:text-text transition-colors"
+                className="step-item__drag"
                 title="Drag to reorder"
               >
                 <GripVertical size={16} />
@@ -67,19 +63,19 @@ export function StepList({
               <button
                 type="button"
                 onClick={() => onSelect(step.id)}
-                className="flex-1 text-left bg-transparent border-none p-0 cursor-pointer font-medium text-text leading-snug"
+                className="step-item__title"
               >
-                <span className="text-muted mr-1.5 font-mono text-sm">#{step.stepIndex ?? "?"}</span>
+                <span className="step-item__index">#{step.stepIndex ?? "?"}</span>
                 {step.title ?? "Untitled"}
               </button>
             </div>
             
-            <div className="flex items-center gap-1.5 ml-6 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="step-item__actions">
               <button
                 type="button"
                 onClick={() => onMove(step.id, -1)}
                 disabled={idx === 0}
-                className="p-1.5 rounded-md text-muted hover:text-text hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+                className="step-item__action"
                 title="Move up"
               >
                 <ArrowUp size={14} />
@@ -88,7 +84,7 @@ export function StepList({
                 type="button"
                 onClick={() => onMove(step.id, 1)}
                 disabled={idx === steps.length - 1}
-                className="p-1.5 rounded-md text-muted hover:text-text hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+                className="step-item__action"
                 title="Move down"
               >
                 <ArrowDown size={14} />
@@ -98,7 +94,7 @@ export function StepList({
                   type="button"
                   onClick={() => onMergeWithNext(step.id)}
                   disabled={idx === steps.length - 1}
-                  className="p-1.5 rounded-md text-muted hover:text-accent hover:bg-accent/10 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+                  className="step-item__action"
                   title="Merge with next step"
                 >
                   <Merge size={14} className="transform rotate-90" />
@@ -108,7 +104,7 @@ export function StepList({
               <button
                 type="button"
                 onClick={() => onDelete(step.id)}
-                className="p-1.5 rounded-md text-muted hover:text-danger hover:bg-danger/10 transition-colors"
+                className="step-item__action step-item__action--danger"
                 title="Delete step"
               >
                 <Trash2 size={14} />

@@ -11,34 +11,34 @@ export type StepDetailsProps = {
 
 export function StepDetails({ title, instruction, note, onChange }: StepDetailsProps) {
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="title" className="text-sm font-semibold text-text">Title</label>
+    <div className="editor-fields">
+      <div className="editor-field">
+        <label htmlFor="title" className="editor-field__label">Title</label>
         <input
           id="title"
-          className="w-full px-3 py-2 bg-surface-2 border border-border rounded-lg text-text focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+          className="editor-field__input"
           value={title}
           onChange={(event) => onChange({ title: event.target.value })}
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="instruction" className="text-sm font-semibold text-text">Instruction</label>
+      <div className="editor-field">
+        <label htmlFor="instruction" className="editor-field__label">Instruction</label>
         <textarea
           id="instruction"
           rows={3}
-          className="w-full px-3 py-2 bg-surface-2 border border-border rounded-lg text-text focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all resize-y"
+          className="editor-field__input resize-y"
           value={instruction}
           onChange={(event) => onChange({ instruction: event.target.value })}
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="note" className="text-sm font-semibold text-text">Note <span className="font-normal text-muted">(Optional)</span></label>
+      <div className="editor-field">
+        <label htmlFor="note" className="editor-field__label">Note <span className="editor-field__hint">(Optional)</span></label>
         <textarea
           id="note"
           rows={2}
-          className="w-full px-3 py-2 bg-surface-2 border border-border rounded-lg text-text focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all resize-y"
+          className="editor-field__input resize-y"
           value={note}
           onChange={(event) => onChange({ note: event.target.value })}
         />

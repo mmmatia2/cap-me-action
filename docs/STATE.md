@@ -63,7 +63,7 @@ Update this file when behavior, architecture, contracts, risks, or priorities ch
   - Repo now includes `pnpm extension:package` for producing a versioned unpacked-extension artifact at `artifacts/extension/` for internal handoff.
   - Repo now includes `pnpm extension:verify-package` to confirm packaged artifact path, manifest version, and expected extension ID before manual Chrome loading.
   - Editor team-library status text now explicitly distinguishes extension bridge unavailability, auth-required/token-unavailable states, and backend/library request failures.
-  - Popup, inspector, and the editor header/import surface now share a repo-backed operational styling baseline: neutral light palette, tighter panel/card treatment, disciplined status colors, and consistent control hierarchy for internal backoffice use.
+  - Popup, inspector, and the editor header/import plus working surface now share a repo-backed operational styling baseline: neutral light palette, tighter panel/card treatment, disciplined status colors, and consistent control hierarchy for internal backoffice use.
   - Content script injects a floating recorder dock from `ui-floating-control/index.html` while capture is active, with live timer/step count and pause/finish controls.
   - Action popup uses local MV3-safe CSS/HTML (no remote Tailwind runtime), aligned to the intended visual direction while preserving existing capture/session wiring.
   - Floating dock has local CSS compact styling, per-tab step count via `GET_DOCK_STATE`, and working `Discard Last Step` action with in-dock feedback.
